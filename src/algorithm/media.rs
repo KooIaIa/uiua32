@@ -226,7 +226,7 @@ pub(crate) fn gif_decode(env: &mut Uiua) -> UiuaResult {
     let bytes = bytes.as_bytes(env, "Gif bytes must be a byte array")?;
     let (frame_rate, value) = crate::media::gif_bytes_to_value(&bytes).map_err(|e| env.error(e))?;
     env.push(value);
-    env.push(frame_rate);
+    env.push(frame_rate as Num);
     Ok(())
 }
 

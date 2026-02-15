@@ -228,7 +228,20 @@ mod tests {
 
     use uiua_parser::PrimClass;
 
-    use crate::{Compiler, Primitive, Uiua};
+    use crate::{Compiler, Num, Primitive, Uiua};
+
+    fn maybe_override_test_path(path: PathBuf) -> PathBuf {
+        #[cfg(feature = "f32_num")]
+        {
+            if let Some(name) = path.file_name() {
+                let override_path = Path::new("tests_f32").join(name);
+                if override_path.is_file() {
+                    return override_path;
+                }
+            }
+        }
+        path
+    }
 
     fn test_files(filter: impl Fn(&Path) -> bool) -> impl Iterator<Item = PathBuf> {
         std::fs::read_dir("tests")
@@ -237,6 +250,7 @@ mod tests {
             .filter(move |path| {
                 path.is_file() && path.extension().is_some_and(|s| s == "ua") && filter(path)
             })
+            .map(maybe_override_test_path)
     }
 
     #[test]
@@ -385,7 +399,7 @@ mod tests {
         comp.create_bind_function("F", (2, 1), |env| {
             let a = env.pop_num().unwrap();
             let b = env.pop_num().unwrap();
-            env.push(a + b);
+            env.push((a + b) as Num);
             Ok(())
         })
         .unwrap();
@@ -413,7 +427,7 @@ mod tests {
         comp.create_bind_function("F", (2, 1), |env| {
             let a = env.pop_num().unwrap();
             let b = env.pop_num().unwrap();
-            env.push(a + b);
+            env.push((a + b) as Num);
             Ok(())
         })
         .unwrap();

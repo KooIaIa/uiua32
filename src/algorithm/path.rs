@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, collections::*, mem::take};
 
-use crate::{Array, ArrayCmp, Boxed, Primitive, SigNode, Signature, Uiua, UiuaResult, Value};
+use crate::{Array, ArrayCmp, Boxed, Num, Primitive, SigNode, Signature, Uiua, UiuaResult, Value};
 
 pub fn path(
     neighbors: SigNode,
@@ -329,7 +329,7 @@ fn path_impl(
     })?;
 
     if has_costs {
-        env.push(shortest_cost);
+        env.push(shortest_cost as Num);
     }
 
     let make_path = |path: Vec<usize>| {

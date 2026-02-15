@@ -3,7 +3,7 @@ use std::collections::{HashMap, hash_map::Entry};
 use ecow::EcoVec;
 
 use crate::{
-    Array, ArrayValue, Node, Ops, Primitive, SigNode, Uiua, UiuaResult, Value, get_ops,
+    Array, ArrayValue, Node, Num, Ops, Primitive, SigNode, Uiua, UiuaResult, Value, get_ops,
     grid_fmt::GridFmt, types::push_empty_rows_value, val_as_arr,
 };
 
@@ -131,7 +131,7 @@ fn tuple2(f: SigNode, env: &mut Uiua) -> UiuaResult {
                             .unwrap_err());
                     }
                     if is_scalar {
-                        ((n as f64).powi(k as i32) * reps as f64).into()
+                        (((n as f64).powi(k as i32) * reps as f64) as Num).into()
                     } else {
                         xs.permute_all(k, reps, env)?
                     }
@@ -141,7 +141,7 @@ fn tuple2(f: SigNode, env: &mut Uiua) -> UiuaResult {
             }
             [Node::Prim(Primitive::Pop, _), Node::Prim(Primitive::Len, _)] => {
                 if is_scalar {
-                    ((n as f64).powi(k as i32)).into()
+                    (((n as f64).powi(k as i32)) as Num).into()
                 } else {
                     xs.permute_all(k, 1, env)?
                 }
@@ -312,20 +312,20 @@ impl Value {
     /// `choose` all combinations of `k` rows from a value
     fn choose(self, k: usize, reverse: bool, same: bool, env: &Uiua) -> UiuaResult<Self> {
         if let Ok(n) = self.as_nat(env, None) {
-            return Ok(combinations(n, k, same).into());
+            return Ok((combinations(n, k, same) as Num).into());
         }
         val_as_arr!(self, |a| a.choose(k, reverse, same, env).map(Into::into))
     }
     /// `permute` all combinations of `k` rows from a value
     fn permute(self, k: usize, env: &Uiua) -> UiuaResult<Self> {
         if let Ok(n) = self.as_nat(env, None) {
-            return Ok(permutations(n, k).into());
+            return Ok((permutations(n, k) as Num).into());
         }
         val_as_arr!(self, |a| a.permute(k, env).map(Into::into))
     }
     fn permute_all(self, k: usize, reps: usize, env: &Uiua) -> UiuaResult<Self> {
         if let Ok(n) = self.as_nat(env, None) {
-            return Ok((n as f64).powi(k as i32).into());
+            return Ok(((n as f64).powi(k as i32) as Num).into());
         }
         val_as_arr!(self, |a| a.permute_all(k, reps, env).map(Into::into))
     }

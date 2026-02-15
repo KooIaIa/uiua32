@@ -43,10 +43,10 @@ macro_rules! constant {
     };
 }
 
-constant!(eta, PI / 2.0);
-constant!(pi, PI);
-constant!(tau, TAU);
-constant!(inf, f64::INFINITY);
+constant!(eta, (PI / 2.0) as Num);
+constant!(pi, PI as Num);
+constant!(tau, TAU as Num);
+constant!(inf, Num::INFINITY);
 
 macro_rules! fill {
     ($ops:expr, $side:expr, $env:expr, $with:ident, $without_but:ident) => {{
@@ -227,7 +227,7 @@ pub fn run_prim_func(prim: &Primitive, env: &mut Uiua) -> UiuaResult {
                 .into());
             }
         }
-        Primitive::Rand => env.push(random()),
+        Primitive::Rand => env.push(random() as Num),
         Primitive::Gen => env.dyadic_rr_env(Value::seeded_gen)?,
         Primitive::Noise => {
             let seed = env.pop(1)?;
@@ -257,10 +257,10 @@ pub fn run_prim_func(prim: &Primitive, env: &mut Uiua) -> UiuaResult {
             let id = env.pop(1)?;
             env.try_recv(id)?;
         }
-        Primitive::Now => env.push(env.rt.backend.now()),
+        Primitive::Now => env.push(env.rt.backend.now() as Num),
         Primitive::TimeZone => {
             let o = env.rt.backend.timezone().map_err(|e| env.error(e))?;
-            env.push(o);
+            env.push(o as Num);
         }
         Primitive::DateTime => env.monadic_ref_env(Value::datetime)?,
         Primitive::Insert => {
@@ -1029,12 +1029,12 @@ impl ImplPrimitive {
             ImplPrimitive::LastSort => env.monadic_env(Value::last_sort)?,
             ImplPrimitive::ReplaceRand => {
                 env.pop(1)?;
-                env.push(random());
+                env.push(random() as Num);
             }
             ImplPrimitive::ReplaceRand2 => {
                 env.pop(1)?;
                 env.pop(2)?;
-                env.push(random());
+                env.push(random() as Num);
             }
             ImplPrimitive::CountUnique => env.monadic_ref(Value::count_unique)?,
             ImplPrimitive::MatchPattern => {

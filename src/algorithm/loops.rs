@@ -26,7 +26,7 @@ pub fn repeat(ops: Ops, with_inverse: bool, count_convergence: bool, env: &mut U
     };
     if count_convergence {
         let count = repeat_impl(f, inv, f64::INFINITY, env)?;
-        env.push(count as f64);
+        env.push(count as Num);
         return Ok(());
     }
     let n = env.pop("repetition count")?;

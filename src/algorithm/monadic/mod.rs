@@ -258,7 +258,7 @@ impl Value {
                             .or_else(|e| env.value_fill().map(|fv| fv.value.clone()).ok_or(e))?
                     }
                     _ => parse_uiua_num(s.into(), env)
-                        .map(Into::into)
+                        .map(|n| Value::from(n as Num))
                         .or_else(|e| env.value_fill().map(|fv| fv.value.clone()).ok_or(e))?,
                 }
             }
@@ -406,7 +406,7 @@ impl Value {
                         return Err(env.error(format!("Cannot parse character {c} in base {base}")));
                     }
                 }
-                return Ok(num.into());
+                return Ok((num as Num).into());
             }
 
             if base == 10 {
@@ -415,7 +415,7 @@ impl Value {
                     .all(|c| c.is_ascii_digit() || c == '-' || c == '.')
                     && let Ok(num) = s.parse::<f64>()
                 {
-                    return Ok(num.into());
+                    return Ok((num as Num).into());
                 }
                 // Fall through
             }
@@ -472,7 +472,7 @@ impl Value {
             num += fract;
             num *= sign;
 
-            Ok(num.into())
+            Ok((num as Num).into())
         };
 
         let per_meta = self.meta.take_per_meta();

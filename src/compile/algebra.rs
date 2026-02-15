@@ -285,7 +285,7 @@ fn expr_to_node(expr: Expr, any_complex: bool, asm: &Assembly) -> Node {
                         node.push(Prim(Mul, span));
                     }
                     _ => {
-                        node.push(Node::new_push(pow));
+                        node.push(Node::new_push(pow as Num));
                         node.push(Prim(Pow, span));
                     }
                 },
@@ -295,7 +295,7 @@ fn expr_to_node(expr: Expr, any_complex: bool, asm: &Assembly) -> Node {
                 }
                 Term::Div(expr) => {
                     recur(node, expr, any_complex, span);
-                    node.push(Node::new_push(1.0));
+                    node.push(Node::new_push(Num::from(1u8)));
                     node.push(Prim(Flip, span));
                     node.push(Prim(Div, span));
                 }
@@ -305,7 +305,7 @@ fn expr_to_node(expr: Expr, any_complex: bool, asm: &Assembly) -> Node {
                 }
                 Term::Log(base, expr) => {
                     recur(node, expr, any_complex, span);
-                    node.push(Node::new_push(base));
+                    node.push(Node::new_push(base as Num));
                     node.push(Prim(Log, span));
                 }
                 Term::Sin(expr) => {

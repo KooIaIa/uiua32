@@ -1145,7 +1145,7 @@ pub(crate) fn run_sys_op(op: &SysOp, env: &mut Uiua) -> UiuaResult {
         }
         SysOp::AudioSampleRate => {
             let sample_rate = env.rt.backend.audio_sample_rate();
-            env.push(f64::from(sample_rate));
+            env.push(sample_rate as Num);
         }
         SysOp::Clip => {
             let contents = env.rt.backend.clipboard().map_err(|e| env.error(e))?;

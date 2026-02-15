@@ -31,8 +31,9 @@ use crate::{
     CustomInverse, Diagnostic, DiagnosticKind, DocComment, DocCommentSig, EXAMPLE_UA,
     ExactDoubleIterator, Function, FunctionId, FunctionOrigin, GitTarget, Ident, ImplPrimitive,
     IndexMacro, InputSrc, IntoInputSrc, IntoSysBackend, Node, NumericSubscript, PrimClass,
-    Primitive, Purity, RunMode, SUBSCRIPT_DIGITS, SemanticComment, SigNode, Signature, Sp, Span,
-    SubSide, Subscript, SysBackend, Uiua, UiuaError, UiuaErrorKind, UiuaResult, VERSION, Value,
+    Num, Primitive, Purity, RunMode, SUBSCRIPT_DIGITS, SemanticComment, SigNode, Signature, Sp,
+    Span, SubSide, Subscript, SysBackend, Uiua, UiuaError, UiuaErrorKind, UiuaResult, VERSION,
+    Value,
     algorithm::ga::{self, Spec},
     ast::*,
     check::nodes_sig,
@@ -1143,9 +1144,9 @@ impl Compiler {
     fn word(&mut self, word: Sp<Word>) -> UiuaResult<Node> {
         self.check_depth(&word.span)?;
         Ok(match word.value {
-            Word::Number(NumWord::Real(n), _) => Node::new_push(n),
-            Word::Number(NumWord::Infinity(false), _) => Node::new_push(f64::INFINITY),
-            Word::Number(NumWord::Infinity(true), _) => Node::new_push(f64::NEG_INFINITY),
+            Word::Number(NumWord::Real(n), _) => Node::new_push(n as Num),
+            Word::Number(NumWord::Infinity(false), _) => Node::new_push(Num::INFINITY),
+            Word::Number(NumWord::Infinity(true), _) => Node::new_push(Num::NEG_INFINITY),
             Word::Number(NumWord::Complex(c), _) => Node::new_push(c),
             Word::Number(NumWord::Err(s), _) => {
                 self.add_error(word.span.clone(), format!("Invalid number `{s}`"));
@@ -2292,7 +2293,7 @@ impl Compiler {
                         if n == 0 {
                             self.add_error(span.clone(), "Cannot take 0th root");
                         }
-                        Node::from_iter([Node::new_push(1.0 / n as f64), self.primitive(Pow, span)])
+                        Node::from_iter([Node::new_push((1.0 / n as f64) as Num), self.primitive(Pow, span)])
                     }
                     Exp => {
                         let span = self.add_span(span);
@@ -2300,7 +2301,7 @@ impl Compiler {
                             2 => Node::ImplPrim(ImplPrimitive::Exp2, span),
                             10 => Node::ImplPrim(ImplPrimitive::Exp10, span),
                             n => Node::from_iter([
-                                Node::new_push(n as f64),
+                                Node::new_push(n as Num),
                                 Node::Prim(Flip, span),
                                 Node::Prim(Pow, span),
                             ]),
@@ -2310,20 +2311,20 @@ impl Compiler {
                         self.subscript_experimental(prim, &span);
                         let mul = 10f64.powi(n);
                         Node::from_iter([
-                            Node::new_push(mul),
+                            Node::new_push(mul as Num),
                             self.primitive(Mul, span.clone()),
                             self.primitive(prim, span.clone()),
-                            Node::new_push(mul),
+                            Node::new_push(mul as Num),
                             self.primitive(Div, span),
                         ])
                     }
                     Round => {
                         let mul = 10f64.powi(n);
                         Node::from_iter([
-                            Node::new_push(mul),
+                            Node::new_push(mul as Num),
                             self.primitive(Mul, span.clone()),
                             self.primitive(prim, span.clone()),
-                            Node::new_push(mul),
+                            Node::new_push(mul as Num),
                             self.primitive(Div, span),
                         ])
                     }

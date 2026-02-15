@@ -1601,13 +1601,6 @@ value_from!(char, Char);
 value_from!(Boxed, Box);
 value_from!(Complex, Complex);
 
-#[cfg(feature = "f32_num")]
-impl From<f64> for Value {
-    fn from(item: f64) -> Self {
-        Self::Num(Array::from(item as Num))
-    }
-}
-
 impl FromIterator<usize> for Value {
     fn from_iter<I: IntoIterator<Item = usize>>(iter: I) -> Self {
         iter.into_iter().map(|i| i as Num).collect()
