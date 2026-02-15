@@ -10,7 +10,7 @@ use ecow::EcoVec;
 use serde::*;
 
 use crate::{
-    Array, ArrayValue, Boxed, Complex, FormatShape, Uiua, UiuaResult, Value,
+    Array, ArrayValue, Boxed, Complex, FormatShape, Num, Uiua, UiuaResult, Value,
     algorithm::ArrayCmpSlice, val_as_arr,
 };
 
@@ -829,6 +829,30 @@ pub const EMPTY_CHAR: char = '\u{2ffff}';
 // A character value used as a tombstone
 pub const TOMBSTONE_CHAR: char = '\u{2fffe}';
 
+#[inline(always)]
+fn empty_nan_num() -> Num {
+    #[cfg(feature = "f32_num")]
+    {
+        must_cast(0x7fc0_0001u32)
+    }
+    #[cfg(not(feature = "f32_num"))]
+    {
+        EMPTY_NAN
+    }
+}
+
+#[inline(always)]
+fn tombstone_nan_num() -> Num {
+    #[cfg(feature = "f32_num")]
+    {
+        must_cast(0x7fc0_0002u32)
+    }
+    #[cfg(not(feature = "f32_num"))]
+    {
+        TOMBSTONE_NAN
+    }
+}
+
 #[track_caller]
 fn hash_start<T: ArrayValue>(arr: &Array<T>, capacity: usize) -> usize {
     let mut hasher = DefaultHasher::new();
@@ -947,18 +971,34 @@ impl MapItem for f64 {
     }
 }
 
-impl MapItem for Complex {
+#[cfg(feature = "f32_num")]
+impl MapItem for Num {
     fn empty_cell() -> Self {
-        Complex::new(EMPTY_NAN, 0.0)
+        empty_nan_num()
     }
     fn tombstone_cell() -> Self {
-        Complex::new(TOMBSTONE_NAN, 0.0)
+        tombstone_nan_num()
     }
     fn is_any_empty_cell(&self) -> bool {
-        self.re.to_bits() == EMPTY_NAN.to_bits()
+        self.to_bits() == empty_nan_num().to_bits()
     }
     fn is_any_tombstone(&self) -> bool {
-        self.re.to_bits() == TOMBSTONE_NAN.to_bits()
+        self.to_bits() == tombstone_nan_num().to_bits()
+    }
+}
+
+impl MapItem for Complex {
+    fn empty_cell() -> Self {
+        Complex::new(empty_nan_num(), 0.0)
+    }
+    fn tombstone_cell() -> Self {
+        Complex::new(tombstone_nan_num(), 0.0)
+    }
+    fn is_any_empty_cell(&self) -> bool {
+        self.re.to_bits() == empty_nan_num().to_bits()
+    }
+    fn is_any_tombstone(&self) -> bool {
+        self.re.to_bits() == tombstone_nan_num().to_bits()
     }
 }
 
@@ -994,10 +1034,10 @@ impl MapItem for Boxed {
 
 impl MapItem for Value {
     fn empty_cell() -> Self {
-        Value::from(EMPTY_NAN)
+        Value::from(empty_nan_num())
     }
     fn tombstone_cell() -> Self {
-        Value::from(TOMBSTONE_NAN)
+        Value::from(tombstone_nan_num())
     }
     fn is_any_empty_cell(&self) -> bool {
         match self {

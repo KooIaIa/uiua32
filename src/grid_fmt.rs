@@ -10,7 +10,7 @@ use std::{
 use ecow::EcoString;
 
 use crate::{
-    Complex, Primitive, WILDCARD_CHAR, WILDCARD_NAN,
+    Complex, Num, Primitive, WILDCARD_CHAR, WILDCARD_NAN,
     algorithm::map::{EMPTY_CHAR, EMPTY_NAN, TOMBSTONE_CHAR, TOMBSTONE_NAN},
     array::{Array, ArrayValue},
     boxed::Boxed,
@@ -143,7 +143,7 @@ impl GridFmt for f64 {
             "∅".into()
         } else if f.to_bits() == TOMBSTONE_NAN.to_bits() {
             "⊥".into()
-        } else if f.to_bits() == WILDCARD_NAN.to_bits() {
+        } else if f.to_bits() == (WILDCARD_NAN as f64).to_bits() {
             "W".into()
         } else if positive.fract() == 0.0 || positive.is_nan() {
             format!("{minus}{positive}")
@@ -299,6 +299,20 @@ impl GridFmt for f64 {
     }
 }
 
+#[cfg(feature = "f32_num")]
+impl GridFmt for f32 {
+    fn fmt_grid(&self, params: GridFmtParams) -> Grid {
+        (*self as f64).fmt_grid(params)
+    }
+    fn summarize(elems: &[Self]) -> String {
+        let elems: Vec<f64> = elems.iter().map(|&n| n as f64).collect();
+        f64::summarize(&elems)
+    }
+    fn alignment() -> ElemAlign {
+        ElemAlign::Right
+    }
+}
+
 impl GridFmt for Complex {
     fn fmt_grid(&self, params: GridFmtParams) -> Grid {
         if self.im.abs() == 0.0 {
@@ -334,8 +348,8 @@ impl GridFmt for Complex {
         if elems.is_empty() {
             return String::new();
         }
-        let (mut re_min, mut im_min) = (f64::INFINITY, f64::INFINITY);
-        let (mut re_max, mut im_max) = (f64::NEG_INFINITY, f64::NEG_INFINITY);
+        let (mut re_min, mut im_min) = (Num::INFINITY, Num::INFINITY);
+        let (mut re_max, mut im_max) = (Num::NEG_INFINITY, Num::NEG_INFINITY);
         let (mut re_mean, mut im_mean) = (0.0, 0.0);
         let (mut re_nan_count, mut im_nan_count) = (0, 0);
         let (mut re_inf_balance, mut im_inf_balance) = (0i64, 0i64);
@@ -362,7 +376,7 @@ impl GridFmt for Complex {
                 } else {
                     *min = min.min(elem);
                     *max = max.max(elem);
-                    *mean += (elem - *mean) / (*i + 1) as f64;
+                    *mean += (elem - *mean) / (*i + 1) as Num;
                     *i += 1;
                 }
             }
@@ -372,15 +386,24 @@ impl GridFmt for Complex {
             (im_inf_balance, &mut im_mean),
         ] {
             if inf_balance != 0 {
-                *mean = inf_balance.signum() as f64 * f64::INFINITY;
+                *mean = inf_balance.signum() as Num * Num::INFINITY;
             }
         }
         if re_min == re_max && im_min == im_max {
             format!("all {}", Complex::new(re_min, im_min).grid_string(false))
         } else {
-            let min = Complex::new(round_sig_dec(re_min, 3), round_sig_dec(im_min, 3));
-            let max = Complex::new(round_sig_dec(re_max, 3), round_sig_dec(im_max, 3));
-            let mean = Complex::new(round_sig_dec(re_mean, 3), round_sig_dec(im_mean, 3));
+            let min = Complex::new(
+                round_sig_dec(re_min as f64, 3) as Num,
+                round_sig_dec(im_min as f64, 3) as Num,
+            );
+            let max = Complex::new(
+                round_sig_dec(re_max as f64, 3) as Num,
+                round_sig_dec(im_max as f64, 3) as Num,
+            );
+            let mean = Complex::new(
+                round_sig_dec(re_mean as f64, 3) as Num,
+                round_sig_dec(im_mean as f64, 3) as Num,
+            );
             format!(
                 "{} - {} μ{}",
                 min.grid_string(false),

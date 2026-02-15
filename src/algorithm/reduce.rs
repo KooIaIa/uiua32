@@ -1,13 +1,12 @@
 //! Algorithms for reducing modifiers
 
-use core::f64;
 use std::{convert::identity, mem::take};
 
 use ecow::{EcoVec, eco_vec};
 
 use crate::{
-    Array, ArrayValue, Complex, ImplPrimitive, Node, Ops, Primitive, Shape, SigNode, Signature,
-    Uiua, UiuaResult, Value,
+    Array, ArrayValue, Complex, ImplPrimitive, Node, Num, Ops, Primitive, Shape, SigNode,
+    Signature, Uiua, UiuaResult, Value,
     algorithm::{get_ops, loops::flip, pervade::*, validate_size},
     check::{nodes_clean_sig, nodes_sig},
     cowslice::cowslice,
@@ -61,7 +60,7 @@ pub(crate) fn reduce_impl(f: SigNode, depth: usize, env: &mut Uiua) -> UiuaResul
             }
         }
         (Some((prim, _flipped)), Value::Byte(bytes)) => {
-            let fill = env.scalar_fill::<f64>().ok().map(|fv| fv.value);
+            let fill = env.scalar_fill::<Num>().ok().map(|fv| fv.value);
             if fill.is_none() && env.value_fill().is_some() {
                 return generic_reduce(f, Value::Byte(bytes), depth, env);
             }
@@ -148,17 +147,17 @@ pub(crate) fn reduce_impl(f: SigNode, depth: usize, env: &mut Uiua) -> UiuaResul
                     if bytes.rank() == 1 {
                         if bytes.meta.is_sorted_up() {
                             env.push(
-                                (bytes.data.first().copied().map(f64::from))
-                                    .unwrap_or(f64::INFINITY)
-                                    .min(fill.unwrap_or(f64::INFINITY)),
+                                (bytes.data.first().copied().map(Num::from))
+                                    .unwrap_or(Num::INFINITY)
+                                    .min(fill.unwrap_or(Num::INFINITY)),
                             );
                             return Ok(());
                         }
                         if bytes.meta.is_sorted_down() {
                             env.push(
-                                (bytes.data.last().copied().map(f64::from))
-                                    .unwrap_or(f64::INFINITY)
-                                    .min(fill.unwrap_or(f64::INFINITY)),
+                                (bytes.data.last().copied().map(Num::from))
+                                    .unwrap_or(Num::INFINITY)
+                                    .min(fill.unwrap_or(Num::INFINITY)),
                             );
                             return Ok(());
                         }
@@ -167,7 +166,7 @@ pub(crate) fn reduce_impl(f: SigNode, depth: usize, env: &mut Uiua) -> UiuaResul
                     if bytes.row_count() == 0 || fill.is_some() && byte_fill.is_none() {
                         fast_reduce_different(
                             bytes,
-                            f64::INFINITY,
+                            Num::INFINITY,
                             fill,
                             depth,
                             min::num_num,
@@ -183,17 +182,17 @@ pub(crate) fn reduce_impl(f: SigNode, depth: usize, env: &mut Uiua) -> UiuaResul
                     if bytes.rank() == 1 {
                         if bytes.meta.is_sorted_up() {
                             env.push(
-                                (bytes.data.last().copied().map(f64::from))
-                                    .unwrap_or(f64::NEG_INFINITY)
-                                    .max(fill.unwrap_or(f64::NEG_INFINITY)),
+                                (bytes.data.last().copied().map(Num::from))
+                                    .unwrap_or(Num::NEG_INFINITY)
+                                    .max(fill.unwrap_or(Num::NEG_INFINITY)),
                             );
                             return Ok(());
                         }
                         if bytes.meta.is_sorted_down() {
                             env.push(
-                                (bytes.data.first().copied().map(f64::from))
-                                    .unwrap_or(f64::NEG_INFINITY)
-                                    .max(fill.unwrap_or(f64::NEG_INFINITY)),
+                                (bytes.data.first().copied().map(Num::from))
+                                    .unwrap_or(Num::NEG_INFINITY)
+                                    .max(fill.unwrap_or(Num::NEG_INFINITY)),
                             );
                             return Ok(());
                         }
@@ -202,7 +201,7 @@ pub(crate) fn reduce_impl(f: SigNode, depth: usize, env: &mut Uiua) -> UiuaResul
                     if bytes.row_count() == 0 || fill.is_some() && byte_fill.is_none() {
                         fast_reduce_different(
                             bytes,
-                            f64::NEG_INFINITY,
+                            Num::NEG_INFINITY,
                             fill,
                             depth,
                             max::num_num,
@@ -312,12 +311,12 @@ fn reduce_identity_impl(
                 Array::new(shape, eco_vec![1u8; len]).into()
             }
             Node::Prim(Max, _) if init_sig() => {
-                let len = validate_size::<f64>([len], env)?;
-                Array::new(shape, eco_vec![f64::NEG_INFINITY; len]).into()
+                let len = validate_size::<Num>([len], env)?;
+                Array::new(shape, eco_vec![Num::NEG_INFINITY; len]).into()
             }
             Node::Prim(Modulo | Min, _) if init_sig() => {
-                let len = validate_size::<f64>([len], env)?;
-                Array::new(shape, eco_vec![f64::INFINITY; len]).into()
+                let len = validate_size::<Num>([len], env)?;
+                Array::new(shape, eco_vec![Num::INFINITY; len]).into()
             }
             Node::Prim(Join, _) if init_sig() => {
                 if val.rank() < 2 {
@@ -398,7 +397,7 @@ macro_rules! reduce_math {
             env: &mut Uiua,
         ) -> UiuaResult<Result<(), Array<$ty>>>
         where
-            $ty: From<f64>,
+            $ty: From<Num>,
         {
             let fill = env.scalar_fill::<$ty>().ok().map(|fv| fv.value);
             if fill.is_none() && env.value_fill().is_some() {
@@ -406,18 +405,18 @@ macro_rules! reduce_math {
             }
             const TID: u8 = <$ty>::TYPE_ID;
             env.push(match prim {
-                Primitive::Add => fast_reduce(xs, 0.0.into(), fill, depth, add::$f, env)?,
+                Primitive::Add => fast_reduce(xs, Num::from(0u8).into(), fill, depth, add::$f, env)?,
                 #[cfg(feature = "opt")]
                 Primitive::Sub if _flipped => {
-                    fast_reduce(xs, 0.0.into(), fill, depth, flip(sub::$f), env)?
+                    fast_reduce(xs, Num::from(0u8).into(), fill, depth, flip(sub::$f), env)?
                 }
                 #[cfg(feature = "opt")]
-                Primitive::Sub => fast_reduce(xs, 0.0.into(), fill, depth, sub::$f, env)?,
-                Primitive::Mul => fast_reduce(xs, 1.0.into(), fill, depth, mul::$f, env)?,
-                Primitive::Or => fast_reduce(xs, 0.0.into(), fill, depth, or::$f, env)?,
+                Primitive::Sub => fast_reduce(xs, Num::from(0u8).into(), fill, depth, sub::$f, env)?,
+                Primitive::Mul => fast_reduce(xs, Num::from(1u8).into(), fill, depth, mul::$f, env)?,
+                Primitive::Or => fast_reduce(xs, Num::from(0u8).into(), fill, depth, or::$f, env)?,
                 Primitive::Min if TID == 0 && xs.rank() == 1 && xs.meta.is_sorted_up() => {
                     let mut min = (xs.data.iter().find(|x| x.is_sortable()).copied())
-                        .unwrap_or(f64::NEG_INFINITY.into());
+                        .unwrap_or(Num::NEG_INFINITY.into());
                     if let Some(fill) = fill {
                         min = min.min(fill);
                     }
@@ -425,7 +424,7 @@ macro_rules! reduce_math {
                 }
                 Primitive::Min if TID == 0 && xs.rank() == 1 && xs.meta.is_sorted_down() => {
                     let mut min = (xs.data.iter().rfind(|&&x| x.is_sortable()).copied())
-                        .unwrap_or(f64::NEG_INFINITY.into());
+                        .unwrap_or(Num::NEG_INFINITY.into());
                     if let Some(fill) = fill {
                         min = min.min(fill);
                     }
@@ -433,7 +432,7 @@ macro_rules! reduce_math {
                 }
                 Primitive::Max if TID == 0 && xs.rank() == 1 && xs.meta.is_sorted_up() => {
                     let mut max = (xs.data.iter().rfind(|&&x| x.is_sortable()).copied())
-                        .unwrap_or(f64::NEG_INFINITY.into());
+                        .unwrap_or(Num::NEG_INFINITY.into());
                     if let Some(fill) = fill {
                         max = max.max(fill);
                     }
@@ -441,15 +440,15 @@ macro_rules! reduce_math {
                 }
                 Primitive::Max if TID == 0 && xs.rank() == 1 && xs.meta.is_sorted_down() => {
                     let mut max = (xs.data.iter().find(|x| x.is_sortable()).copied())
-                        .unwrap_or(f64::NEG_INFINITY.into());
+                        .unwrap_or(Num::NEG_INFINITY.into());
                     if let Some(fill) = fill {
                         max = max.max(fill);
                     }
                     max.into()
                 }
-                Primitive::Min => fast_reduce(xs, f64::INFINITY.into(), fill, depth, min::$f, env)?,
+                Primitive::Min => fast_reduce(xs, Num::INFINITY.into(), fill, depth, min::$f, env)?,
                 Primitive::Max => {
-                    fast_reduce(xs, f64::NEG_INFINITY.into(), fill, depth, max::$f, env)?
+                    fast_reduce(xs, Num::NEG_INFINITY.into(), fill, depth, max::$f, env)?
                 }
                 _ => return Ok(Err(xs)),
             });
@@ -458,7 +457,7 @@ macro_rules! reduce_math {
     };
 }
 
-reduce_math!(reduce_nums, f64, num_num);
+reduce_math!(reduce_nums, Num, num_num);
 reduce_math!(reduce_coms, Complex, com_x);
 
 fn fast_reduce_different<T, U>(
@@ -809,12 +808,12 @@ pub fn scan(ops: Ops, env: &mut Uiua) -> UiuaResult {
             let mut sorted_up = false;
             let mut sorted_down = false;
             let mut arr = match prim {
-                Primitive::Eq => fast_scan(nums, |a, b| is_eq::num_num(a, b) as f64),
-                Primitive::Ne => fast_scan(nums, |a, b| is_ne::num_num(a, b) as f64),
-                Primitive::Lt => fast_scan(nums, |a, b| other_is_lt::num_num(a, b) as f64),
-                Primitive::Le => fast_scan(nums, |a, b| other_is_le::num_num(a, b) as f64),
-                Primitive::Gt => fast_scan(nums, |a, b| other_is_gt::num_num(a, b) as f64),
-                Primitive::Ge => fast_scan(nums, |a, b| other_is_ge::num_num(a, b) as f64),
+                Primitive::Eq => fast_scan(nums, |a, b| is_eq::num_num(a, b) as Num),
+                Primitive::Ne => fast_scan(nums, |a, b| is_ne::num_num(a, b) as Num),
+                Primitive::Lt => fast_scan(nums, |a, b| other_is_lt::num_num(a, b) as Num),
+                Primitive::Le => fast_scan(nums, |a, b| other_is_le::num_num(a, b) as Num),
+                Primitive::Gt => fast_scan(nums, |a, b| other_is_gt::num_num(a, b) as Num),
+                Primitive::Ge => fast_scan(nums, |a, b| other_is_ge::num_num(a, b) as Num),
                 Primitive::Add => fast_scan(nums, add::num_num),
                 Primitive::Sub if flipped => fast_scan(nums, flip(sub::num_num)),
                 Primitive::Sub => fast_scan(nums, sub::num_num),
@@ -859,24 +858,24 @@ pub fn scan(ops: Ops, env: &mut Uiua) -> UiuaResult {
                 Primitive::Le => fast_scan(bytes, other_is_le::generic).into(),
                 Primitive::Gt => fast_scan(bytes, other_is_gt::generic).into(),
                 Primitive::Ge => fast_scan(bytes, other_is_ge::generic).into(),
-                Primitive::Add => fast_scan::<f64>(bytes.convert(), add::num_num).into(),
+                Primitive::Add => fast_scan::<Num>(bytes.convert(), add::num_num).into(),
                 Primitive::Sub if flipped => {
-                    fast_scan::<f64>(bytes.convert(), flip(sub::num_num)).into()
+                    fast_scan::<Num>(bytes.convert(), flip(sub::num_num)).into()
                 }
-                Primitive::Sub => fast_scan::<f64>(bytes.convert(), sub::num_num).into(),
-                Primitive::Mul => fast_scan::<f64>(bytes.convert(), mul::num_num).into(),
+                Primitive::Sub => fast_scan::<Num>(bytes.convert(), sub::num_num).into(),
+                Primitive::Mul => fast_scan::<Num>(bytes.convert(), mul::num_num).into(),
                 Primitive::Div if flipped => {
-                    fast_scan::<f64>(bytes.convert(), flip(div::num_num)).into()
+                    fast_scan::<Num>(bytes.convert(), flip(div::num_num)).into()
                 }
-                Primitive::Div => fast_scan::<f64>(bytes.convert(), div::num_num).into(),
+                Primitive::Div => fast_scan::<Num>(bytes.convert(), div::num_num).into(),
                 Primitive::Modulo if flipped => {
-                    fast_scan::<f64>(bytes.convert(), flip(modulo::num_num)).into()
+                    fast_scan::<Num>(bytes.convert(), flip(modulo::num_num)).into()
                 }
-                Primitive::Modulo => fast_scan::<f64>(bytes.convert(), modulo::num_num).into(),
+                Primitive::Modulo => fast_scan::<Num>(bytes.convert(), modulo::num_num).into(),
                 Primitive::Atan if flipped => {
-                    fast_scan::<f64>(bytes.convert(), flip(atan2::num_num)).into()
+                    fast_scan::<Num>(bytes.convert(), flip(atan2::num_num)).into()
                 }
-                Primitive::Atan => fast_scan::<f64>(bytes.convert(), atan2::num_num).into(),
+                Primitive::Atan => fast_scan::<Num>(bytes.convert(), atan2::num_num).into(),
                 Primitive::Min => {
                     sorted_down = true;
                     if bytes.rank() == 1 && bytes.meta.is_sorted_down() {

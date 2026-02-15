@@ -102,7 +102,7 @@ pub struct Spec {
 fn ga_arg(value: Value, env: &Uiua) -> UiuaResult<(Array<f64>, Shape, usize)> {
     let arr = match value {
         Value::Byte(arr) => arr.convert(),
-        Value::Num(arr) => arr,
+        Value::Num(arr) => arr.convert_with(|n| n as f64),
         val => {
             return Err(env.error(format!(
                 "Cannot do geometric algebra on {}",
@@ -168,7 +168,7 @@ enum VectorHint {
 use VectorHint::*;
 
 use super::{
-    pervade::{self, InfalliblePervasiveFn, bin_pervade_mut, bin_pervade_recursive},
+    pervade::{InfalliblePervasiveFn, bin_pervade_mut, bin_pervade_recursive},
     tuples::combinations,
 };
 
@@ -573,7 +573,7 @@ pub fn add(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64>>
     let b_slice = b.arr.data.as_slice();
     let c_slice = c_data.make_mut();
 
-    let add = InfalliblePervasiveFn::new(pervade::add::num_num);
+    let add = InfalliblePervasiveFn::new(|a: f64, b: f64| a + b);
     for i in 0..1usize << dims {
         let Some(ci) = csel[i] else {
             continue;
@@ -638,7 +638,7 @@ pub fn divide(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f6
                         a.shape, b.shape
                     )));
                 }
-                bin_pervade_mut(a, &mut b, false, env, pervade::div::num_num)?;
+                bin_pervade_mut(a, &mut b, false, env, |a: f64, b: f64| a / b)?;
                 b
             }
         },
@@ -701,7 +701,7 @@ fn product_impl_not_transposed(
 ) -> UiuaResult<Array<f64>> {
     // Scalar case
     if a.arr.rank() == 0 || b.arr.rank() == 0 {
-        bin_pervade_mut(a.arr, &mut b.arr, false, env, pervade::mul::num_num)?;
+        bin_pervade_mut(a.arr, &mut b.arr, false, env, |a: f64, b: f64| a * b)?;
         b.arr.meta.take_sorted_flags();
         return Ok(b.arr);
     }
@@ -780,7 +780,7 @@ fn product_impl_transposed(
     //         .collect::<Vec<_>>()
     // );
 
-    let mul = InfalliblePervasiveFn::new(pervade::mul::num_num);
+    let mul = InfalliblePervasiveFn::new(|a: f64, b: f64| a * b);
     for i in 0..1usize << dims {
         if dims > 5 {
             env.respect_execution_limit()?;

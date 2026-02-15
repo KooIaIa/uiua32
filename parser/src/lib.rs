@@ -10,7 +10,6 @@ mod signature;
 mod split;
 mod subscript;
 
-use bytemuck::must_cast;
 pub use {
     complex::*, defs::*, error::*, inputs::*, lex::*, parse::parse, primitive::*, signature::*,
     split::*, subscript::*,
@@ -19,11 +18,29 @@ pub use {
 /// A Uiua identifier
 pub type Ident = ecow::EcoString;
 
-// NOTE: must_cast to f64 only works if f64 and u64 have same endianness.
-//       This is true of all currently supported platforms for rust,
-//       but may not be true in general. Swap out for f64::from_bits when
-//       the MSRV passes 1.83 to ensure correctness on all future platforms.
+/// The floating-point scalar used by [`Complex`].
+#[cfg(feature = "f32_num")]
+pub type ComplexNum = f32;
+/// The floating-point scalar used by [`Complex`].
+#[cfg(not(feature = "f32_num"))]
+pub type ComplexNum = f64;
+
+/// Numeric constants that match [`ComplexNum`].
+#[cfg(feature = "f32_num")]
+pub mod num_consts {
+    pub use core::f32::consts::*;
+}
+/// Numeric constants that match [`ComplexNum`].
+#[cfg(not(feature = "f32_num"))]
+pub mod num_consts {
+    pub use core::f64::consts::*;
+}
+
 /// A NaN value that always compares as equal
-pub const WILDCARD_NAN: f64 = must_cast(0x7ff8_0000_0000_0000u64 | 0x0000_0000_0000_0003);
+#[cfg(feature = "f32_num")]
+pub const WILDCARD_NAN: ComplexNum = ComplexNum::from_bits(0x7fc0_0003);
+/// A NaN value that always compares as equal
+#[cfg(not(feature = "f32_num"))]
+pub const WILDCARD_NAN: ComplexNum = ComplexNum::from_bits(0x7ff8_0000_0000_0000u64 | 0x3);
 /// A character value used as a wildcard that will equal any character
 pub const WILDCARD_CHAR: char = '\u{100000}';

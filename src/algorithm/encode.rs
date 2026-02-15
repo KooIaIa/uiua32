@@ -7,7 +7,7 @@ use enum_iterator::{Sequence, all};
 
 use crate::{
     Array, ArrayFlags, ArrayMeta, Boxed, Complex, Shape, SubSide, Uiua, UiuaResult, Value,
-    algorithm::validate_size, cowslice::CowSlice, fill::FillValue,
+    algorithm::validate_size, cowslice::CowSlice, fill::FillValue, Num,
 };
 
 use super::FillContext;
@@ -35,10 +35,10 @@ impl Value {
                 let n = n.data[0];
                 if meta.flags.contains(ArrayFlags::BOOLEAN_LITERAL) && (n == 0.0 || n == 1.0) {
                     serde_json::Value::Bool(n != 0.0)
-                } else if n.fract() == 0.0 && n.abs() < i64::MAX as f64 {
+                } else if n.fract() == 0.0 && n.abs() < i64::MAX as Num {
                     serde_json::Value::Number((n as i64).into())
                 } else {
-                    serde_json::Number::from_f64(n)
+                    serde_json::Number::from_f64(n as f64)
                         .map(Into::into)
                         .unwrap_or(serde_json::Value::Null)
                 }
@@ -84,17 +84,17 @@ impl Value {
     }
     pub(crate) fn from_json_value(json_value: serde_json::Value, _env: &Uiua) -> UiuaResult<Self> {
         Ok(match json_value {
-            serde_json::Value::Null => f64::NAN.into(),
+            serde_json::Value::Null => Num::NAN.into(),
             serde_json::Value::Bool(b) => b.into(),
             serde_json::Value::Number(n) => {
                 if let Some(n) = n.as_f64() {
                     if n >= 0.0 && n.fract() == 0.0 && n < u8::MAX as f64 {
                         (n as u8).into()
                     } else {
-                        n.into()
+                        (n as Num).into()
                     }
                 } else {
-                    0.0.into()
+                    Num::from(0u8).into()
                 }
             }
             serde_json::Value::String(s) => s.into(),
@@ -599,39 +599,39 @@ impl Value {
                 let mut all_non_neg = true;
                 let mut all_int = true;
                 let mut all_f32 = true;
-                let mut min = 0f64;
-                let mut max = 0f64;
+                let mut min = Num::from(0u8);
+                let mut max = Num::from(0u8);
                 for &n in &arr.data {
                     all_non_neg &= n >= 0.0;
                     all_int &= n.fract() == 0.0;
-                    all_f32 &= (n as f32 as f64).to_bits() == n.to_bits();
+                    all_f32 &= (n as f32 as Num).to_bits() == n.to_bits();
                     min = min.min(n);
                     max = max.max(n);
                 }
                 let ty = if all_non_neg && all_int {
-                    if max <= u8::MAX as f64 {
+                    if max <= u8::MAX as Num {
                         BinType::U8
-                    } else if max <= u16::MAX as f64 {
+                    } else if max <= u16::MAX as Num {
                         BinType::U16
-                    } else if max <= u32::MAX as f64 {
+                    } else if max <= u32::MAX as Num {
                         BinType::U32
-                    } else if max <= u64::MAX as f64 {
+                    } else if max <= u64::MAX as Num {
                         BinType::U64
-                    } else if max <= 2f32.powf(24.0) as f64 {
+                    } else if max <= 2f32.powf(24.0) as Num {
                         BinType::F32
                     } else {
                         BinType::F64
                     }
                 } else if all_int {
-                    if min >= i8::MIN as f64 && max <= i8::MAX as f64 {
+                    if min >= i8::MIN as Num && max <= i8::MAX as Num {
                         BinType::I8
-                    } else if min >= i16::MIN as f64 && max <= i16::MAX as f64 {
+                    } else if min >= i16::MIN as Num && max <= i16::MAX as Num {
                         BinType::I16
-                    } else if min >= i32::MIN as f64 && max <= i32::MAX as f64 {
+                    } else if min >= i32::MIN as Num && max <= i32::MAX as Num {
                         BinType::I32
-                    } else if min >= i64::MIN as f64 && max <= i64::MAX as f64 {
+                    } else if min >= i64::MIN as Num && max <= i64::MAX as Num {
                         BinType::I64
-                    } else if min >= -(2f32.powf(24.0)) as f64 && max <= 2f32.powf(24.0) as f64 {
+                    } else if min >= -(2f32.powf(24.0)) as Num && max <= 2f32.powf(24.0) as Num {
                         BinType::F32
                     } else {
                         BinType::F64
@@ -643,7 +643,7 @@ impl Value {
                 };
                 write_ty_meta(ty, &arr.meta, bytes, depth, env)?;
                 write_shape(&arr.shape, bytes);
-                fn write(nums: &[f64], bytes: &mut Vec<u8>, f: impl Fn(f64, &mut Vec<u8>)) {
+                fn write(nums: &[Num], bytes: &mut Vec<u8>, f: impl Fn(Num, &mut Vec<u8>)) {
                     for &n in nums {
                         f(n, bytes);
                     }
@@ -659,7 +659,7 @@ impl Value {
                     BinType::I32 => write(data, bytes, |n, b| b.extend((n as i32).to_le_bytes())),
                     BinType::I64 => write(data, bytes, |n, b| b.extend((n as i64).to_le_bytes())),
                     BinType::F32 => write(data, bytes, |n, b| b.extend((n as f32).to_le_bytes())),
-                    BinType::F64 => write(data, bytes, |n, b| b.extend(n.to_le_bytes())),
+                    BinType::F64 => write(data, bytes, |n, b| b.extend((n as f64).to_le_bytes())),
                     _ => unreachable!(),
                 }
             }
@@ -797,15 +797,15 @@ impl Value {
         }
         let mut val: Value = match ty {
             BinType::U8 => make(bytes, shape, env, u8::from_le_bytes, |x| x)?.into(),
-            BinType::U16 => make(bytes, shape, env, u16::from_le_bytes, |x| x as f64)?.into(),
-            BinType::U32 => make(bytes, shape, env, u32::from_le_bytes, |x| x as f64)?.into(),
-            BinType::U64 => make(bytes, shape, env, u64::from_le_bytes, |x| x as f64)?.into(),
-            BinType::I8 => make(bytes, shape, env, i8::from_le_bytes, |x| x as f64)?.into(),
-            BinType::I16 => make(bytes, shape, env, i16::from_le_bytes, |x| x as f64)?.into(),
-            BinType::I32 => make(bytes, shape, env, i32::from_le_bytes, |x| x as f64)?.into(),
-            BinType::I64 => make(bytes, shape, env, i64::from_le_bytes, |x| x as f64)?.into(),
-            BinType::F32 => make(bytes, shape, env, f32::from_le_bytes, |x| x as f64)?.into(),
-            BinType::F64 => make(bytes, shape, env, f64::from_le_bytes, |x| x)?.into(),
+            BinType::U16 => make(bytes, shape, env, u16::from_le_bytes, |x| x as Num)?.into(),
+            BinType::U32 => make(bytes, shape, env, u32::from_le_bytes, |x| x as Num)?.into(),
+            BinType::U64 => make(bytes, shape, env, u64::from_le_bytes, |x| x as Num)?.into(),
+            BinType::I8 => make(bytes, shape, env, i8::from_le_bytes, |x| x as Num)?.into(),
+            BinType::I16 => make(bytes, shape, env, i16::from_le_bytes, |x| x as Num)?.into(),
+            BinType::I32 => make(bytes, shape, env, i32::from_le_bytes, |x| x as Num)?.into(),
+            BinType::I64 => make(bytes, shape, env, i64::from_le_bytes, |x| x as Num)?.into(),
+            BinType::F32 => make(bytes, shape, env, f32::from_le_bytes, |x| x as Num)?.into(),
+            BinType::F64 => make(bytes, shape, env, f64::from_le_bytes, |x| x as Num)?.into(),
             BinType::Char => {
                 if bytes.len() < size_of::<u32>() {
                     return Err(env.error("Missing byte count"));
@@ -829,8 +829,8 @@ impl Value {
             }
             BinType::Complex => make(bytes, shape, env, u128::from_le_bytes, |u| {
                 let bytes = u.to_le_bytes();
-                let re = f64::from_le_bytes(bytes[..size_of::<f64>()].try_into().unwrap());
-                let im = f64::from_le_bytes(bytes[size_of::<f64>()..].try_into().unwrap());
+                let re = f64::from_le_bytes(bytes[..size_of::<f64>()].try_into().unwrap()) as Num;
+                let im = f64::from_le_bytes(bytes[size_of::<f64>()..].try_into().unwrap()) as Num;
                 Complex::new(re, im)
             })?
             .into(),

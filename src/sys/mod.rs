@@ -1544,18 +1544,22 @@ pub(crate) fn run_sys_op_mod(op: &SysOp, ops: Ops, env: &mut Uiua) -> UiuaResult
                     stream_env.error("Audio stream function must return a numeric array")
                 })?;
                 match &*samples.shape {
-                    [_] => Ok(samples.data.iter().map(|&x| [x, x]).collect()),
+                    [_] => Ok(samples
+                        .data
+                        .iter()
+                        .map(|&x| [x as f64, x as f64])
+                        .collect()),
                     &[n, 2] => {
                         let mut samps: Vec<[f64; 2]> = Vec::with_capacity(n);
                         for samp in samples.data.chunks_exact(2) {
-                            samps.push([samp[0], samp[1]]);
+                            samps.push([samp[0] as f64, samp[1] as f64]);
                         }
                         Ok(samps)
                     }
                     &[2, n] => {
                         let mut samps: Vec<[f64; 2]> = Vec::with_capacity(n);
                         for i in 0..n {
-                            samps.push([samples.data[i], samples.data[i + n]]);
+                            samps.push([samples.data[i] as f64, samples.data[i + n] as f64]);
                         }
                         Ok(samps)
                     }

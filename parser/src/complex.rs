@@ -1,28 +1,30 @@
 //! The [`Complex`] type
 
-use std::{f64::consts::E, fmt, ops::*};
+use std::{fmt, ops::*};
 
 use bytemuck::{Pod, Zeroable};
 use serde::*;
 
+use crate::{ComplexNum, num_consts::E};
+
 /// Uiua's complex number type
 #[derive(Clone, Copy, PartialOrd, Default, Serialize, Deserialize, Pod, Zeroable)]
-#[serde(from = "(f64, f64)", into = "(f64, f64)")]
+#[serde(from = "(ComplexNum, ComplexNum)", into = "(ComplexNum, ComplexNum)")]
 #[repr(C)]
 pub struct Complex {
     /// The real part
-    pub re: f64,
+    pub re: ComplexNum,
     /// The imaginary part
-    pub im: f64,
+    pub im: ComplexNum,
 }
 
-impl From<(f64, f64)> for Complex {
-    fn from((re, im): (f64, f64)) -> Self {
+impl From<(ComplexNum, ComplexNum)> for Complex {
+    fn from((re, im): (ComplexNum, ComplexNum)) -> Self {
         Self { re, im }
     }
 }
 
-impl From<Complex> for (f64, f64) {
+impl From<Complex> for (ComplexNum, ComplexNum) {
     fn from(c: Complex) -> Self {
         (c.re, c.im)
     }
@@ -44,7 +46,7 @@ impl Complex {
     /// The complex number 0 + 1i
     pub const I: Self = Self { re: 0.0, im: 1.0 };
     /// Create a new complex number
-    pub fn new(re: f64, im: f64) -> Self {
+    pub fn new(re: ComplexNum, im: ComplexNum) -> Self {
         Self { re, im }
     }
     /// Get the minimum of the real and imaginary parts of two complex numbers, ignoring NaN
@@ -85,7 +87,7 @@ impl Complex {
         }
     }
     /// Get the absolute value of a complex number
-    pub fn abs(self) -> f64 {
+    pub fn abs(self) -> ComplexNum {
         // Do not use `self.re.hypot(self.im)` because it is slower, especially on WASM
         (self.re * self.re + self.im * self.im).sqrt()
     }
@@ -101,15 +103,15 @@ impl Complex {
         if len == 0.0 { Self::ZERO } else { self / len }
     }
     /// Calculate the principal value of the complex number
-    pub fn arg(self) -> f64 {
+    pub fn arg(self) -> ComplexNum {
         self.im.atan2(self.re)
     }
     /// Convert a complex number to polar coordinates
-    pub fn to_polar(self) -> (f64, f64) {
+    pub fn to_polar(self) -> (ComplexNum, ComplexNum) {
         (self.abs(), self.arg())
     }
     /// Convert polar coordinates to a complex number
-    pub fn from_polar(r: f64, theta: f64) -> Self {
+    pub fn from_polar(r: ComplexNum, theta: ComplexNum) -> Self {
         r * Self::new(theta.cos(), theta.sin())
     }
     /// Raise a complex number to a complex power
@@ -122,7 +124,7 @@ impl Complex {
         ((r.ln() + Self::I * theta) * power).exp()
     }
     /// Raise a complex number to a real power
-    pub fn powf(self, power: f64) -> Self {
+    pub fn powf(self, power: ComplexNum) -> Self {
         if power == 0.0 {
             return Self::ONE;
         }
@@ -185,8 +187,8 @@ impl Complex {
         self.re.is_nan() || self.im.is_nan()
     }
     /// Get the complex number as a real number
-    pub fn into_real(self) -> Option<f64> {
-        if self.im.abs() < f64::EPSILON {
+    pub fn into_real(self) -> Option<ComplexNum> {
+        if self.im.abs() < ComplexNum::EPSILON {
             Some(self.re)
         } else {
             None
@@ -205,7 +207,7 @@ impl Complex {
     }
 }
 
-fn safe_mul(a: f64, b: f64) -> f64 {
+fn safe_mul(a: ComplexNum, b: ComplexNum) -> ComplexNum {
     if a.is_infinite() && b == 0.0 || a == 0.0 && b.is_infinite() {
         0.0
     } else {
@@ -213,15 +215,25 @@ fn safe_mul(a: f64, b: f64) -> f64 {
     }
 }
 
+impl From<ComplexNum> for Complex {
+    fn from(re: ComplexNum) -> Self {
+        Self { re, im: 0.0 }
+    }
+}
+
+#[cfg(feature = "f32_num")]
 impl From<f64> for Complex {
     fn from(re: f64) -> Self {
-        Self { re, im: 0.0 }
+        Self {
+            re: re as ComplexNum,
+            im: 0.0,
+        }
     }
 }
 
 impl From<u8> for Complex {
     fn from(value: u8) -> Self {
-        f64::from(value).into()
+        ComplexNum::from(value).into()
     }
 }
 
@@ -251,9 +263,9 @@ impl Add for Complex {
     }
 }
 
-impl Add<f64> for Complex {
+impl Add<ComplexNum> for Complex {
     type Output = Self;
-    fn add(self, rhs: f64) -> Self::Output {
+    fn add(self, rhs: ComplexNum) -> Self::Output {
         Self {
             re: self.re + rhs,
             im: self.im,
@@ -261,7 +273,7 @@ impl Add<f64> for Complex {
     }
 }
 
-impl Add<Complex> for f64 {
+impl Add<Complex> for ComplexNum {
     type Output = Complex;
     fn add(self, rhs: Complex) -> Self::Output {
         Complex {
@@ -281,9 +293,9 @@ impl Sub for Complex {
     }
 }
 
-impl Sub<f64> for Complex {
+impl Sub<ComplexNum> for Complex {
     type Output = Self;
-    fn sub(self, rhs: f64) -> Self::Output {
+    fn sub(self, rhs: ComplexNum) -> Self::Output {
         Self {
             re: self.re - rhs,
             im: self.im,
@@ -291,7 +303,7 @@ impl Sub<f64> for Complex {
     }
 }
 
-impl Sub<Complex> for f64 {
+impl Sub<Complex> for ComplexNum {
     type Output = Complex;
     fn sub(self, rhs: Complex) -> Self::Output {
         Complex {
@@ -311,9 +323,9 @@ impl Mul for Complex {
     }
 }
 
-impl Mul<f64> for Complex {
+impl Mul<ComplexNum> for Complex {
     type Output = Self;
-    fn mul(self, rhs: f64) -> Self::Output {
+    fn mul(self, rhs: ComplexNum) -> Self::Output {
         Self {
             re: self.re * rhs,
             im: self.im * rhs,
@@ -321,7 +333,7 @@ impl Mul<f64> for Complex {
     }
 }
 
-impl Mul<Complex> for f64 {
+impl Mul<Complex> for ComplexNum {
     type Output = Complex;
     fn mul(self, rhs: Complex) -> Self::Output {
         Complex {
@@ -342,9 +354,9 @@ impl Div for Complex {
     }
 }
 
-impl Div<f64> for Complex {
+impl Div<ComplexNum> for Complex {
     type Output = Self;
-    fn div(self, rhs: f64) -> Self::Output {
+    fn div(self, rhs: ComplexNum) -> Self::Output {
         Self {
             re: self.re / rhs,
             im: self.im / rhs,
@@ -352,7 +364,7 @@ impl Div<f64> for Complex {
     }
 }
 
-impl Div<Complex> for f64 {
+impl Div<Complex> for ComplexNum {
     type Output = Complex;
     fn div(self, rhs: Complex) -> Self::Output {
         let denom = rhs.re * rhs.re + rhs.im * rhs.im;
@@ -370,9 +382,9 @@ impl Rem for Complex {
     }
 }
 
-impl Rem<f64> for Complex {
+impl Rem<ComplexNum> for Complex {
     type Output = Self;
-    fn rem(self, rhs: f64) -> Self::Output {
+    fn rem(self, rhs: ComplexNum) -> Self::Output {
         Self {
             re: self.re.rem_euclid(rhs),
             im: self.im.rem_euclid(rhs),
@@ -380,7 +392,7 @@ impl Rem<f64> for Complex {
     }
 }
 
-impl Rem<Complex> for f64 {
+impl Rem<Complex> for ComplexNum {
     type Output = Complex;
     fn rem(self, rhs: Complex) -> Self::Output {
         Complex {

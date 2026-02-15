@@ -238,6 +238,7 @@ default = [
   "clipboard",
   "opt",
 ]
+f32_num = ["uiua_parser/f32_num"]
 ffi = ["libffi", "libloading"]
 fft = ["rustfft", "num-complex"]
 font_shaping = ["cosmic-text", "sys-locale"]

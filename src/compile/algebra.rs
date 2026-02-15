@@ -5,7 +5,7 @@ use ecow::eco_vec;
 use serde::*;
 
 use crate::{
-    Assembly, Complex,
+    Assembly, Complex, Num,
     ImplPrimitive::*,
     Node::{self, *},
     Primitive::*,
@@ -44,7 +44,7 @@ pub fn algebraic_inverse(nodes: &[Node], asm: &Assembly) -> Result<Node, Option<
         if data.any_complex {
             Node::new_push(x)
         } else {
-            Node::new_push(x.into_real().unwrap_or(f64::NAN))
+            Node::new_push(x.into_real().unwrap_or(Num::NAN))
         }
     };
 
@@ -68,7 +68,7 @@ pub fn algebraic_inverse(nodes: &[Node], asm: &Assembly) -> Result<Node, Option<
             // - If it looks roundish, we do (y - c)^(1/p) / k^(1/p) with k^(1/p) getting its error fixed
             // - Otherwise, we do x = ((y - c)/k)^(1/p)
             let mut root_p_of_k = k.powc(1.0 / p);
-            const ROUND_TO: f64 = 2.0 * f64::EPSILON;
+            const ROUND_TO: Num = 2.0 * Num::EPSILON;
             let rounded = (root_p_of_k / ROUND_TO).round() * ROUND_TO;
             let k_is_int = k.im == 0.0 && k.re.fract() == 0.0;
             let pre_calc_root = !k_is_int && root_p_of_k != rounded;
@@ -184,7 +184,7 @@ fn expr_deriv(expr: Expr) -> Option<Expr> {
     for (term, mut coef) in expr.0 {
         match term {
             Term::X(mut x) => {
-                coef *= x;
+                coef *= x as Num;
                 if coef == ZERO {
                     continue;
                 }
@@ -204,7 +204,7 @@ fn expr_deriv(expr: Expr) -> Option<Expr> {
             Term::Log(base, expr) => {
                 let prime = expr_deriv(expr.clone())?.as_constant()?;
                 let term = Term::Div(expr);
-                *deriv.0.entry(term).or_default() += coef * prime / base.ln();
+                *deriv.0.entry(term).or_default() += coef * prime / base.ln() as Num;
             }
             Term::Sin(expr) => {
                 let prime = expr_deriv(expr.clone())?.as_constant()?;
@@ -231,7 +231,7 @@ fn expr_integral(expr: Expr) -> Option<Expr> {
                 if x == 0.0 {
                     deriv.0.insert(Term::Log(E, Term::X(1.0).into()), coef);
                 } else {
-                    coef /= x;
+                    coef /= x as Num;
                     deriv.0.insert(Term::X(x), coef);
                 }
             }
@@ -273,7 +273,7 @@ fn expr_to_node(expr: Expr, any_complex: bool, asm: &Assembly) -> Node {
                         node.push(if any_complex {
                             Node::new_push(coef)
                         } else {
-                            Node::new_push(coef.into_real().unwrap_or(f64::NAN))
+                            Node::new_push(coef.into_real().unwrap_or(Num::NAN))
                         });
                         node.push(Prim(Add, span));
                         mul_coef = false;
@@ -321,7 +321,7 @@ fn expr_to_node(expr: Expr, any_complex: bool, asm: &Assembly) -> Node {
                 node.push(if any_complex {
                     Node::new_push(coef)
                 } else {
-                    Node::new_push(coef.into_real().unwrap_or(f64::NAN))
+                    Node::new_push(coef.into_real().unwrap_or(Num::NAN))
                 });
                 node.push(Prim(Mul, span));
             }
@@ -441,7 +441,7 @@ impl<'a> AlgebraEnv<'a> {
             Call(f, _) => self.node(&self.asm[f])?,
             Push(val) if val.rank() > 0 => return Err(AlgebraError::NonScalar),
             Push(val) => match val {
-                Value::Num(arr) => self.stack.push(arr.data[0].into()),
+                Value::Num(arr) => self.stack.push((arr.data[0] as f64).into()),
                 Value::Byte(arr) => self.stack.push((arr.data[0] as f64).into()),
                 Value::Complex(arr) => {
                     self.stack.push(arr.data[0].into());
@@ -822,7 +822,7 @@ impl Expr {
                 acc
             })
         } else if let Some((term, coef)) = self.single() {
-            Some(Expr::new_single(term.pow(power)?, coef.powf(power)))
+            Some(Expr::new_single(term.pow(power as f64)?, coef.powf(power as Num)))
         } else if self.0.is_empty() {
             Some(self)
         } else {
@@ -830,7 +830,7 @@ impl Expr {
         }
     }
     fn log(self, base: Self) -> Option<Self> {
-        let base = base.as_constant()?.into_real()?;
+        let base = base.as_constant()?.into_real()? as f64;
         Some(Term::Log(base, self).into())
     }
 }

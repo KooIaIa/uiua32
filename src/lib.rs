@@ -161,6 +161,7 @@ mod function;
 mod grid_fmt;
 mod impl_prim;
 pub mod lsp;
+mod num;
 #[doc(hidden)]
 pub mod profile;
 mod run;
@@ -177,6 +178,8 @@ mod value;
 #[doc(hidden)]
 pub mod window;
 
+pub use self::num::consts as num_consts;
+pub use self::num::{Num, as_num, num_from_bits};
 #[allow(unused_imports)]
 pub use self::{
     algorithm::{IgnoreError, media},

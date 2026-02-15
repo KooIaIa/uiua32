@@ -8,7 +8,7 @@ use std::{
 use ecow::eco_vec;
 
 use crate::{
-    Complex, Shape, Uiua, UiuaError, UiuaResult, Value,
+    Complex, Num, Shape, Uiua, UiuaError, UiuaResult, Value,
     algorithm::{loops::flip, validate_size},
     array::*,
     fill::FillValue,
@@ -831,10 +831,10 @@ where {
 
 pub mod not {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         1.0 - a
     }
-    pub fn byte(a: u8) -> f64 {
+    pub fn byte(a: u8) -> Num {
         num(a.into())
     }
     pub fn bool(a: u8) -> u8 {
@@ -870,11 +870,11 @@ fn toggle_char_case(a: char) -> char {
 
 pub mod scalar_neg {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         -a
     }
-    pub fn byte(a: u8) -> f64 {
-        -f64::from(a)
+    pub fn byte(a: u8) -> Num {
+        -Num::from(a)
     }
     pub fn char(a: char) -> char {
         toggle_char_case(a)
@@ -888,7 +888,7 @@ pub mod scalar_neg {
 }
 pub mod scalar_abs {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.abs()
     }
     pub fn byte(a: u8) -> u8 {
@@ -906,7 +906,7 @@ pub mod scalar_abs {
             a
         }
     }
-    pub fn com(a: Complex) -> f64 {
+    pub fn com(a: Complex) -> Num {
         a.abs()
     }
     pub fn error<T: Display>(a: T, env: &Uiua) -> UiuaError {
@@ -914,7 +914,7 @@ pub mod scalar_abs {
     }
 }
 
-fn character_sign(a: char) -> f64 {
+fn character_sign(a: char) -> Num {
     if a.is_uppercase() {
         1.0
     } else if a.is_lowercase() {
@@ -926,13 +926,13 @@ fn character_sign(a: char) -> f64 {
 
 pub mod sign {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         if a == 0.0 { 0.0 } else { a.signum() }
     }
     pub fn byte(a: u8) -> u8 {
         (a > 0) as u8
     }
-    pub fn char(a: char) -> f64 {
+    pub fn char(a: char) -> Num {
         character_sign(a)
     }
     pub fn com(a: Complex) -> Complex {
@@ -944,11 +944,11 @@ pub mod sign {
 }
 pub mod recip {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.recip()
     }
-    pub fn byte(a: u8) -> f64 {
-        f64::from(a).recip()
+    pub fn byte(a: u8) -> Num {
+        Num::from(a).recip()
     }
     pub fn com(a: Complex) -> Complex {
         a.recip()
@@ -959,11 +959,11 @@ pub mod recip {
 }
 pub mod sqrt {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.sqrt()
     }
-    pub fn byte(a: u8) -> f64 {
-        f64::from(a).sqrt()
+    pub fn byte(a: u8) -> Num {
+        Num::from(a).sqrt()
     }
     pub fn bool(a: u8) -> u8 {
         a
@@ -976,13 +976,13 @@ pub mod sqrt {
     }
 }
 pub mod exp {
-    use std::f64::consts::E;
+    use crate::num_consts::E;
 
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         E.powf(a)
     }
-    pub fn byte(a: u8) -> f64 {
+    pub fn byte(a: u8) -> Num {
         num(a.into())
     }
     pub fn com(a: Complex) -> Complex {
@@ -994,11 +994,11 @@ pub mod exp {
 }
 pub mod ln {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.ln()
     }
-    pub fn byte(a: u8) -> f64 {
-        f64::from(a).ln()
+    pub fn byte(a: u8) -> Num {
+        Num::from(a).ln()
     }
     pub fn com(a: Complex) -> Complex {
         a.ln()
@@ -1009,11 +1009,11 @@ pub mod ln {
 }
 pub mod sin {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.sin()
     }
-    pub fn byte(a: u8) -> f64 {
-        f64::from(a).sin()
+    pub fn byte(a: u8) -> Num {
+        Num::from(a).sin()
     }
     pub fn com(a: Complex) -> Complex {
         a.sin()
@@ -1024,11 +1024,11 @@ pub mod sin {
 }
 pub mod cos {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.cos()
     }
-    pub fn byte(a: u8) -> f64 {
-        f64::from(a).cos()
+    pub fn byte(a: u8) -> Num {
+        Num::from(a).cos()
     }
     pub fn com(a: Complex) -> Complex {
         a.cos()
@@ -1039,11 +1039,11 @@ pub mod cos {
 }
 pub mod asin {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.asin()
     }
-    pub fn byte(a: u8) -> f64 {
-        f64::from(a).asin()
+    pub fn byte(a: u8) -> Num {
+        Num::from(a).asin()
     }
     pub fn com(a: Complex) -> Complex {
         a.asin()
@@ -1054,11 +1054,11 @@ pub mod asin {
 }
 pub mod acos {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.acos()
     }
-    pub fn byte(a: u8) -> f64 {
-        f64::from(a).acos()
+    pub fn byte(a: u8) -> Num {
+        Num::from(a).acos()
     }
     pub fn com(a: Complex) -> Complex {
         a.acos()
@@ -1069,7 +1069,7 @@ pub mod acos {
 }
 pub mod floor {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.floor()
     }
     pub fn byte(a: u8) -> u8 {
@@ -1084,7 +1084,7 @@ pub mod floor {
 }
 pub mod ceil {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.ceil()
     }
     pub fn byte(a: u8) -> u8 {
@@ -1099,7 +1099,7 @@ pub mod ceil {
 }
 pub mod round {
     use super::*;
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.round()
     }
     pub fn byte(a: u8) -> u8 {
@@ -1116,7 +1116,7 @@ pub mod round {
 pub mod complex_re {
     use super::*;
 
-    pub fn com(a: Complex) -> f64 {
+    pub fn com(a: Complex) -> Num {
         a.re
     }
     pub fn generic<T>(a: T) -> T {
@@ -1129,10 +1129,10 @@ pub mod complex_re {
 pub mod complex_im {
     use super::*;
 
-    pub fn com(a: Complex) -> f64 {
+    pub fn com(a: Complex) -> Num {
         a.im
     }
-    pub fn num(_a: f64) -> f64 {
+    pub fn num(_a: Num) -> Num {
         0.0
     }
     pub fn byte(_a: u8) -> u8 {
@@ -1146,10 +1146,10 @@ pub mod complex_im {
 pub mod exp2 {
     use super::*;
 
-    pub fn byte(a: u8) -> f64 {
-        num(a as f64)
+    pub fn byte(a: u8) -> Num {
+        num(a as Num)
     }
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.exp2()
     }
     pub fn com(a: Complex) -> Complex {
@@ -1163,11 +1163,11 @@ pub mod exp2 {
 pub mod exp10 {
     use super::*;
 
-    pub fn byte(a: u8) -> f64 {
-        10f64.powi(a as i32)
+    pub fn byte(a: u8) -> Num {
+        Num::from(10u8).powi(a as i32)
     }
-    pub fn num(a: f64) -> f64 {
-        10f64.powf(a)
+    pub fn num(a: Num) -> Num {
+        Num::from(10u8).powf(a)
     }
     pub fn com(a: Complex) -> Complex {
         Complex::from(10.0).powc(a)
@@ -1180,10 +1180,10 @@ pub mod exp10 {
 pub mod log2 {
     use super::*;
 
-    pub fn byte(a: u8) -> f64 {
-        num(a as f64)
+    pub fn byte(a: u8) -> Num {
+        num(a as Num)
     }
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.log2()
     }
     pub fn com(a: Complex) -> Complex {
@@ -1197,10 +1197,10 @@ pub mod log2 {
 pub mod log10 {
     use super::*;
 
-    pub fn byte(a: u8) -> f64 {
-        num(a as f64)
+    pub fn byte(a: u8) -> Num {
+        num(a as Num)
     }
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a.log10()
     }
     pub fn com(a: Complex) -> Complex {
@@ -1215,13 +1215,13 @@ pub mod log10 {
 pub mod square_abs {
     use super::*;
 
-    pub fn byte(a: u8) -> f64 {
-        num(a as f64)
+    pub fn byte(a: u8) -> Num {
+        num(a as Num)
     }
-    pub fn num(a: f64) -> f64 {
+    pub fn num(a: Num) -> Num {
         a * a
     }
-    pub fn com(a: Complex) -> f64 {
+    pub fn com(a: Complex) -> Num {
         a.re * a.re + a.im * a.im
     }
 
@@ -1240,7 +1240,7 @@ macro_rules! eq_impl {
             pub fn always_less<A, B>(_: A, _: B) -> u8 {
                 ($ordering $eq Ordering::Greater).into()
             }
-            pub fn num_num(a: f64, b: f64) -> u8 {
+            pub fn num_num(a: Num, b: Num) -> u8 {
                 (b.array_cmp(&a) $eq $ordering) as u8
             }
             pub fn com_x(a: Complex, b: impl Into<Complex>) -> u8 {
@@ -1249,11 +1249,11 @@ macro_rules! eq_impl {
             pub fn x_com(a: impl Into<Complex>, b: Complex) -> u8 {
                 (b.array_cmp(&a.into()) $eq $ordering) as u8
             }
-            pub fn byte_num(a: u8, b: f64) -> u8 {
-                (b.array_cmp(&f64::from(a)) $eq $ordering) as u8
+            pub fn byte_num(a: u8, b: Num) -> u8 {
+                (b.array_cmp(&Num::from(a)) $eq $ordering) as u8
             }
-            pub fn num_byte(a: f64, b: u8) -> u8 {
-                (f64::from(b).array_cmp(&a) $eq $ordering) as u8
+            pub fn num_byte(a: Num, b: u8) -> u8 {
+                (Num::from(b).array_cmp(&a) $eq $ordering) as u8
             }
             pub fn generic<T: Ord>(a: T, b: T) -> u8 {
                 (b.cmp(&a) $eq $ordering).into()
@@ -1278,28 +1278,28 @@ macro_rules! cmp_impl {
             pub fn always_less<A, B>(_: A, _: B) -> u8 {
                 ($ordering $eq Ordering::Greater).into()
             }
-            pub fn num_num(a: f64, b: f64) -> u8 {
+            pub fn num_num(a: Num, b: Num) -> u8 {
                 (b.array_cmp(&a) $eq $ordering) as u8
             }
             pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
                 let b = b.into();
                 Complex::new(
-                    (b.re.array_cmp(&a.re) $eq $ordering) as u8 as f64,
-                    (b.im.array_cmp(&a.im) $eq $ordering) as u8 as f64
+                    (b.re.array_cmp(&a.re) $eq $ordering) as u8 as Num,
+                    (b.im.array_cmp(&a.im) $eq $ordering) as u8 as Num
                 )
             }
             pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
                 let a = a.into();
                 Complex::new(
-                    (b.re.array_cmp(&a.re) $eq $ordering) as u8 as f64,
-                    (b.im.array_cmp(&a.im) $eq $ordering) as u8 as f64
+                    (b.re.array_cmp(&a.re) $eq $ordering) as u8 as Num,
+                    (b.im.array_cmp(&a.im) $eq $ordering) as u8 as Num
                 )
             }
-            pub fn byte_num(a: u8, b: f64) -> u8 {
-                (b.array_cmp(&f64::from(a)) $eq $ordering) as u8
+            pub fn byte_num(a: u8, b: Num) -> u8 {
+                (b.array_cmp(&Num::from(a)) $eq $ordering) as u8
             }
-            pub fn num_byte(a: f64, b: u8) -> u8 {
-                (f64::from(b).array_cmp(&a) $eq $ordering) as u8
+            pub fn num_byte(a: Num, b: u8) -> u8 {
+                (Num::from(b).array_cmp(&a) $eq $ordering) as u8
             }
             pub fn generic<T: Ord>(a: T, b: T) -> u8 {
                 (b.cmp(&a) $eq $ordering).into()
@@ -1323,20 +1323,20 @@ cmp_impl!(other_is_ge != Ordering::Less);
 
 pub mod add {
     use super::*;
-    pub fn num_num(a: f64, b: f64) -> f64 {
+    pub fn num_num(a: Num, b: Num) -> Num {
         b + a
     }
-    pub fn byte_byte(a: u8, b: u8) -> f64 {
-        f64::from(a) + f64::from(b)
+    pub fn byte_byte(a: u8, b: u8) -> Num {
+        Num::from(a) + Num::from(b)
     }
     pub fn bool_bool(a: u8, b: u8) -> u8 {
         b + a
     }
-    pub fn byte_num(a: u8, b: f64) -> f64 {
-        b + f64::from(a)
+    pub fn byte_num(a: u8, b: Num) -> Num {
+        b + Num::from(a)
     }
-    pub fn num_byte(a: f64, b: u8) -> f64 {
-        a + f64::from(b)
+    pub fn num_byte(a: Num, b: u8) -> Num {
+        a + Num::from(b)
     }
     pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
         b.into() + a
@@ -1344,11 +1344,11 @@ pub mod add {
     pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
         b + a.into()
     }
-    pub fn num_char(a: f64, b: char) -> char {
+    pub fn num_char(a: Num, b: char) -> char {
         char::from_u32(((b as i64).saturating_add(a as i64)).clamp(0, char::MAX as i64) as u32)
             .unwrap_or('\0')
     }
-    pub fn char_num(a: char, b: f64) -> char {
+    pub fn char_num(a: char, b: Num) -> char {
         char::from_u32(((b as i64).saturating_add(a as i64)).clamp(0, char::MAX as i64) as u32)
             .unwrap_or('\0')
     }
@@ -1365,17 +1365,17 @@ pub mod add {
 
 pub mod sub {
     use super::*;
-    pub fn num_num(a: f64, b: f64) -> f64 {
+    pub fn num_num(a: Num, b: Num) -> Num {
         b - a
     }
-    pub fn byte_byte(a: u8, b: u8) -> f64 {
-        f64::from(b) - f64::from(a)
+    pub fn byte_byte(a: u8, b: u8) -> Num {
+        Num::from(b) - Num::from(a)
     }
-    pub fn byte_num(a: u8, b: f64) -> f64 {
-        b - f64::from(a)
+    pub fn byte_num(a: u8, b: Num) -> Num {
+        b - Num::from(a)
     }
-    pub fn num_byte(a: f64, b: u8) -> f64 {
-        f64::from(b) - a
+    pub fn num_byte(a: Num, b: u8) -> Num {
+        Num::from(b) - a
     }
     pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
         b.into() - a
@@ -1383,12 +1383,12 @@ pub mod sub {
     pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
         b - a.into()
     }
-    pub fn num_char(a: f64, b: char) -> char {
+    pub fn num_char(a: Num, b: char) -> char {
         char::from_u32(((b as i64).saturating_sub(a as i64)).clamp(0, char::MAX as i64) as u32)
             .unwrap_or('\0')
     }
-    pub fn char_char(a: char, b: char) -> f64 {
-        ((b as i64) - (a as i64)) as f64
+    pub fn char_char(a: char, b: char) -> Num {
+        ((b as i64) - (a as i64)) as Num
     }
     pub fn byte_char(a: u8, b: char) -> char {
         char::from_u32(((b as i64) - (a as i64)) as u32).unwrap_or('\0')
@@ -1402,19 +1402,19 @@ macro_rules! bin_op_mod {
     ($name:ident, $a:ident, $b:ident, $byte_convert:expr, $byte_ret:ty, $f:expr, $err:literal) => {
         pub mod $name {
             use super::*;
-            pub fn num_num($a: f64, $b: f64) -> f64 {
+            pub fn num_num($a: Num, $b: Num) -> Num {
                 $f
             }
-            pub fn byte_byte($a: u8, $b: u8) -> f64 {
+            pub fn byte_byte($a: u8, $b: u8) -> Num {
                 let $a = $byte_convert($a);
                 let $b = $byte_convert($b);
                 $f
             }
-            pub fn byte_num($a: u8, $b: f64) -> f64 {
+            pub fn byte_num($a: u8, $b: Num) -> Num {
                 let $a = $byte_convert($a);
                 $f
             }
-            pub fn num_byte($a: f64, $b: u8) -> f64 {
+            pub fn num_byte($a: Num, $b: u8) -> Num {
                 let $b = $byte_convert($b);
                 $f
             }
@@ -1437,25 +1437,25 @@ macro_rules! bin_op_mod {
 
 pub mod mul {
     use super::*;
-    pub fn num_num(a: f64, b: f64) -> f64 {
+    pub fn num_num(a: Num, b: Num) -> Num {
         b * a
     }
-    pub fn byte_byte(a: u8, b: u8) -> f64 {
-        f64::from(b) * f64::from(a)
+    pub fn byte_byte(a: u8, b: u8) -> Num {
+        Num::from(b) * Num::from(a)
     }
     pub fn bool_bool(a: u8, b: u8) -> u8 {
         b & a
     }
-    pub fn byte_num(a: u8, b: f64) -> f64 {
-        b * f64::from(a)
+    pub fn byte_num(a: u8, b: Num) -> Num {
+        b * Num::from(a)
     }
-    pub fn num_byte(a: f64, b: u8) -> f64 {
-        f64::from(b) * a
+    pub fn num_byte(a: Num, b: u8) -> Num {
+        Num::from(b) * a
     }
-    pub fn num_char(a: f64, b: char) -> char {
+    pub fn num_char(a: Num, b: char) -> char {
         if a < 0.0 { toggle_char_case(b) } else { b }
     }
-    pub fn char_num(a: char, b: f64) -> char {
+    pub fn char_num(a: char, b: Num) -> char {
         if b < 0.0 { toggle_char_case(a) } else { a }
     }
     pub fn byte_char(_: u8, b: char) -> char {
@@ -1478,19 +1478,19 @@ pub mod mul {
 pub mod set_sign {
     use super::*;
 
-    pub fn num_num(a: f64, b: f64) -> f64 {
+    pub fn num_num(a: Num, b: Num) -> Num {
         mul::num_num(a, b.abs())
     }
-    pub fn byte_byte(a: u8, b: u8) -> f64 {
-        num_num(a as f64, b as f64)
+    pub fn byte_byte(a: u8, b: u8) -> Num {
+        num_num(a as Num, b as Num)
     }
-    pub fn byte_num(a: u8, b: f64) -> f64 {
-        num_num(a as f64, b)
+    pub fn byte_num(a: u8, b: Num) -> Num {
+        num_num(a as Num, b)
     }
-    pub fn num_byte(a: f64, b: u8) -> f64 {
-        num_num(a, b as f64)
+    pub fn num_byte(a: Num, b: u8) -> Num {
+        num_num(a, b as Num)
     }
-    pub fn num_char(a: f64, b: char) -> char {
+    pub fn num_char(a: Num, b: char) -> char {
         if a > 0.0 {
             scalar_abs::char(b)
         } else if a < 0.0 {
@@ -1499,7 +1499,7 @@ pub mod set_sign {
             b
         }
     }
-    pub fn char_num(a: char, b: f64) -> char {
+    pub fn char_num(a: char, b: Num) -> char {
         num_char(b, a)
     }
     pub fn byte_char(a: u8, b: char) -> char {
@@ -1521,19 +1521,19 @@ pub mod set_sign {
 
 pub mod div {
     use super::*;
-    pub fn num_num(a: f64, b: f64) -> f64 {
+    pub fn num_num(a: Num, b: Num) -> Num {
         b / a
     }
-    pub fn byte_byte(a: u8, b: u8) -> f64 {
-        f64::from(b) / f64::from(a)
+    pub fn byte_byte(a: u8, b: u8) -> Num {
+        Num::from(b) / Num::from(a)
     }
-    pub fn byte_num(a: u8, b: f64) -> f64 {
-        b / f64::from(a)
+    pub fn byte_num(a: u8, b: Num) -> Num {
+        b / Num::from(a)
     }
-    pub fn num_byte(a: f64, b: u8) -> f64 {
-        f64::from(b) / a
+    pub fn num_byte(a: Num, b: u8) -> Num {
+        Num::from(b) / a
     }
-    pub fn num_char(a: f64, b: char) -> char {
+    pub fn num_char(a: Num, b: char) -> char {
         if a < 0.0 { toggle_char_case(b) } else { b }
     }
     pub fn byte_char(_: u8, b: char) -> char {
@@ -1552,16 +1552,16 @@ pub mod div {
 
 pub mod modulo {
     use super::*;
-    pub fn num_num(a: f64, b: f64) -> f64 {
+    pub fn num_num(a: Num, b: Num) -> Num {
         b.rem_euclid(a).abs()
     }
-    pub fn byte_byte(a: u8, b: u8) -> f64 {
+    pub fn byte_byte(a: u8, b: u8) -> Num {
         num_num(a.into(), b.into())
     }
-    pub fn byte_num(a: u8, b: f64) -> f64 {
+    pub fn byte_num(a: u8, b: Num) -> Num {
         num_num(a.into(), b)
     }
-    pub fn num_byte(a: f64, b: u8) -> f64 {
+    pub fn num_byte(a: Num, b: u8) -> Num {
         num_num(a, b.into())
     }
     pub fn com_com(a: Complex, b: Complex) -> Complex {
@@ -1570,7 +1570,7 @@ pub mod modulo {
     pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
         b.into() % a
     }
-    pub fn x_com(a: impl Into<f64>, b: Complex) -> Complex {
+    pub fn x_com(a: impl Into<Num>, b: Complex) -> Complex {
         b % a.into()
     }
     pub fn error<T: Display>(a: T, b: T, env: &Uiua) -> UiuaError {
@@ -1580,7 +1580,7 @@ pub mod modulo {
 
 pub mod or {
     use super::*;
-    pub fn num_num(a: f64, b: f64) -> f64 {
+    pub fn num_num(a: Num, b: Num) -> Num {
         if a == 0.0 {
             return b;
         }
@@ -1588,7 +1588,7 @@ pub mod or {
             return a;
         }
         if a.is_nan() || b.is_nan() {
-            return f64::NAN;
+            return Num::NAN;
         }
         if a.is_infinite() {
             return a.signum() * b;
@@ -1596,8 +1596,8 @@ pub mod or {
         if b.is_infinite() {
             return b.signum() * a;
         }
-        if (1.0..=u128::MAX as f64).contains(&a)
-            && (1.0..=u128::MAX as f64).contains(&b)
+        if (1.0..=u128::MAX as Num).contains(&a)
+            && (1.0..=u128::MAX as Num).contains(&b)
             && a.fract() == 0.0
             && b.fract() == 0.0
         {
@@ -1617,20 +1617,20 @@ pub mod or {
                     break;
                 }
             }
-            return (a << shift) as f64;
+            return (a << shift) as Num;
         }
-        fn recurse(a: f64, b: f64) -> f64 {
-            if b <= 8.0 * f64::EPSILON {
+        fn recurse(a: Num, b: Num) -> Num {
+            if b <= 8.0 * Num::EPSILON {
                 return a;
             }
             recurse(b, a.rem_euclid(b))
         }
         a.signum() * b.signum() * recurse(a.abs(), b.abs())
     }
-    pub fn num_byte(a: f64, b: u8) -> f64 {
+    pub fn num_byte(a: Num, b: u8) -> Num {
         num_num(b.into(), a)
     }
-    pub fn byte_num(a: u8, b: f64) -> f64 {
+    pub fn byte_num(a: u8, b: Num) -> Num {
         num_num(a.into(), b)
     }
     pub fn byte_byte(mut a: u8, mut b: u8) -> u8 {
@@ -1676,24 +1676,24 @@ bin_op_mod!(
     atan2,
     a,
     b,
-    f64::from,
-    f64,
+    Num::from,
+    Num,
     a.atan2(b),
     "Cannot get the atan2 of {a} and {b}"
 );
 pub mod scalar_pow {
     use super::*;
-    pub fn num_num(a: f64, b: f64) -> f64 {
+    pub fn num_num(a: Num, b: Num) -> Num {
         b.powf(a)
     }
-    pub fn byte_byte(a: u8, b: u8) -> f64 {
-        f64::from(b).powf(f64::from(a))
+    pub fn byte_byte(a: u8, b: u8) -> Num {
+        Num::from(b).powf(Num::from(a))
     }
-    pub fn byte_num(a: u8, b: f64) -> f64 {
+    pub fn byte_num(a: u8, b: Num) -> Num {
         b.powi(a as i32)
     }
-    pub fn num_byte(a: f64, b: u8) -> f64 {
-        f64::from(b).powf(a)
+    pub fn num_byte(a: Num, b: u8) -> Num {
+        Num::from(b).powf(a)
     }
     pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
         b.into().powc(a)
@@ -1707,23 +1707,23 @@ pub mod scalar_pow {
 }
 pub mod root {
     use super::*;
-    pub fn num_num(a: f64, b: f64) -> f64 {
+    pub fn num_num(a: Num, b: Num) -> Num {
         b.powf(1.0 / a)
     }
-    pub fn byte_byte(a: u8, b: u8) -> f64 {
-        f64::from(b).powf(1.0 / f64::from(a))
+    pub fn byte_byte(a: u8, b: u8) -> Num {
+        Num::from(b).powf(1.0 / Num::from(a))
     }
-    pub fn byte_num(a: u8, b: f64) -> f64 {
-        b.powf(1.0 / a as f64)
+    pub fn byte_num(a: u8, b: Num) -> Num {
+        b.powf(1.0 / a as Num)
     }
-    pub fn num_byte(a: f64, b: u8) -> f64 {
-        f64::from(b).powf(1.0 / a)
+    pub fn num_byte(a: Num, b: u8) -> Num {
+        Num::from(b).powf(1.0 / a)
     }
     pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
-        b.into().powc(1.0 / a)
+        b.into().powc(Complex::ONE / a)
     }
     pub fn x_com(a: impl Into<Complex>, b: Complex) -> Complex {
-        b.powc(1.0 / a.into())
+        b.powc(Complex::ONE / a.into())
     }
     pub fn error<T: Display>(a: T, b: T, env: &Uiua) -> UiuaError {
         env.error(format!("Cannot get the {a} root of {b}"))
@@ -1733,24 +1733,24 @@ bin_op_mod!(
     log,
     a,
     b,
-    f64::from,
-    f64,
+    Num::from,
+    Num,
     b.log(a),
     "Cannot get the log base {a} of {b}"
 );
 pub mod complex {
     use super::*;
 
-    pub fn num_num(a: f64, b: f64) -> Complex {
+    pub fn num_num(a: Num, b: Num) -> Complex {
         Complex::new(b, a)
     }
     pub fn byte_byte(a: u8, b: u8) -> Complex {
         Complex::new(b.into(), a.into())
     }
-    pub fn byte_num(a: u8, b: f64) -> Complex {
+    pub fn byte_num(a: u8, b: Num) -> Complex {
         Complex::new(b, a.into())
     }
-    pub fn num_byte(a: f64, b: u8) -> Complex {
+    pub fn num_byte(a: Num, b: u8) -> Complex {
         Complex::new(b.into(), a)
     }
     pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
@@ -1769,10 +1769,10 @@ pub mod complex {
 pub mod abs_complex {
     use super::*;
 
-    pub fn num(a: impl Into<f64>, b: impl Into<f64>) -> f64 {
+    pub fn num(a: impl Into<Num>, b: impl Into<Num>) -> Num {
         complex::num_num(a.into(), b.into()).abs()
     }
-    pub fn com(a: impl Into<Complex>, b: impl Into<Complex>) -> f64 {
+    pub fn com(a: impl Into<Complex>, b: impl Into<Complex>) -> Num {
         complex::com_x(a.into(), b).abs()
     }
     pub fn error<T: Display>(a: T, b: T, env: &Uiua) -> UiuaError {
@@ -1782,7 +1782,7 @@ pub mod abs_complex {
 
 pub mod max {
     use super::*;
-    pub fn num_num(a: f64, b: f64) -> f64 {
+    pub fn num_num(a: Num, b: Num) -> Num {
         a.max(b)
     }
     pub fn byte_byte(a: u8, b: u8) -> u8 {
@@ -1791,10 +1791,10 @@ pub mod max {
     pub fn bool_bool(a: u8, b: u8) -> u8 {
         a | b
     }
-    pub fn num_byte(a: f64, b: u8) -> f64 {
+    pub fn num_byte(a: Num, b: u8) -> Num {
         num_num(a, b.into())
     }
-    pub fn byte_num(a: u8, b: f64) -> f64 {
+    pub fn byte_num(a: u8, b: Num) -> Num {
         num_num(a.into(), b)
     }
     pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {
@@ -1813,7 +1813,7 @@ pub mod max {
 
 pub mod min {
     use super::*;
-    pub fn num_num(a: f64, b: f64) -> f64 {
+    pub fn num_num(a: Num, b: Num) -> Num {
         a.min(b)
     }
     pub fn byte_byte(a: u8, b: u8) -> u8 {
@@ -1822,10 +1822,10 @@ pub mod min {
     pub fn bool_bool(a: u8, b: u8) -> u8 {
         a & b
     }
-    pub fn num_byte(a: f64, b: u8) -> f64 {
+    pub fn num_byte(a: Num, b: u8) -> Num {
         num_num(a, b.into())
     }
-    pub fn byte_num(a: u8, b: f64) -> f64 {
+    pub fn byte_num(a: u8, b: Num) -> Num {
         num_num(a.into(), b)
     }
     pub fn com_x(a: Complex, b: impl Into<Complex>) -> Complex {

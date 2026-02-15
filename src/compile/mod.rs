@@ -2274,14 +2274,17 @@ impl Compiler {
                         ])
                     }
                     Neg => {
-                        use crate::Complex;
+                        use crate::{Complex, Num};
                         let rotation = match n {
                             // Ensure that common cases are exact
                             -1..=1 => Complex::ONE,
                             2 | -2 => -Complex::ONE,
                             4 => Complex::I,
                             -4 => -Complex::I,
-                            _ => Complex::from_polar(1.0, std::f64::consts::TAU / n as f64),
+                            _ => Complex::from_polar(
+                                Num::from(1u8),
+                                (std::f64::consts::TAU / n as f64) as Num,
+                            ),
                         };
                         Node::from_iter([Node::new_push(rotation), self.primitive(Mul, span)])
                     }

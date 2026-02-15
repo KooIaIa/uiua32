@@ -3,7 +3,7 @@
 use ecow::eco_vec;
 
 use crate::{
-    Array, ArrayValue, Complex, ImplPrimitive, Node, Ops, Primitive, Shape, SigNode, Uiua,
+    Array, ArrayValue, Complex, ImplPrimitive, Node, Num, Ops, Primitive, Shape, SigNode, Uiua,
     UiuaResult,
     algorithm::{FillContext, get_ops, pervade::*, zip::rows1},
     random,
@@ -99,7 +99,7 @@ fn generic_table(f: SigNode, xs: Value, ys: Value, env: &mut Uiua) -> UiuaResult
         2 => {
             let x_scalar = xs.rank() == 0;
             let y_scalar = ys.rank() == 0;
-            validate_size::<f64>([sig.outputs(), xs.row_count(), ys.row_count()], env)?;
+            validate_size::<Num>([sig.outputs(), xs.row_count(), ys.row_count()], env)?;
             let new_shape = Shape::from([xs.row_count(), ys.row_count()]);
             let outputs = sig.outputs();
             let mut items = multi_output(outputs, Value::builder(xs.row_count() * ys.row_count()));
@@ -138,7 +138,7 @@ fn generic_table(f: SigNode, xs: Value, ys: Value, env: &mut Uiua) -> UiuaResult
             for i in 3..n {
                 others.push(env.pop(i + 1)?);
             }
-            validate_size::<f64>(
+            validate_size::<Num>(
                 [
                     sig.outputs(),
                     xs.row_count(),
@@ -200,7 +200,7 @@ fn generic_table(f: SigNode, xs: Value, ys: Value, env: &mut Uiua) -> UiuaResult
 
 pub fn table_list(f: SigNode, xs: Value, ys: Value, env: &mut Uiua) -> UiuaResult {
     crate::profile_function!();
-    validate_size::<f64>([f.sig.outputs(), xs.row_count(), ys.row_count()], env)?;
+    validate_size::<Num>([f.sig.outputs(), xs.row_count(), ys.row_count()], env)?;
     match (f.node.as_flipped_primitive(), xs, ys) {
         (Some((prim, flipped)), Value::Num(xs), Value::Num(ys)) => {
             if let Err((xs, ys)) = table_nums(prim, flipped, xs, ys, env)? {
@@ -258,13 +258,13 @@ pub fn table_list(f: SigNode, xs: Value, ys: Value, env: &mut Uiua) -> UiuaResul
                 env.push(fast_table_list(xs, ys, modulo::byte_byte, env)?)
             }
             #[cfg(feature = "opt")]
-            Primitive::Atan if flipped => env.push(fast_table_list::<f64, _>(
+            Primitive::Atan if flipped => env.push(fast_table_list::<Num, _>(
                 xs.convert(),
                 ys.convert(),
                 flip(atan2::num_num),
                 env,
             )?),
-            Primitive::Atan if !flipped => env.push(fast_table_list::<f64, _>(
+            Primitive::Atan if !flipped => env.push(fast_table_list::<Num, _>(
                 xs.convert(),
                 ys.convert(),
                 atan2::num_num,
@@ -419,7 +419,7 @@ macro_rules! table_math {
     };
 }
 
-table_math!(table_nums, f64, num_num);
+table_math!(table_nums, Num, num_num);
 table_math!(table_coms, crate::Complex, com_x, #[cfg(feature = "opt")]);
 
 fn fast_table_list<T: ArrayValue, U: ArrayValue + Default>(
@@ -662,7 +662,7 @@ fn reduce_table_bytes(
             }
         }};
     }
-    let fill = env.scalar_fill::<f64>().ok().map(|fv| fv.value);
+    let fill = env.scalar_fill::<Num>().ok().map(|fv| fv.value);
     match fp {
         Primitive::Add => {
             all_gs!(
@@ -698,8 +698,8 @@ fn reduce_table_bytes(
                     ys.convert(),
                     min::num_num,
                     min::com_x,
-                    f64::INFINITY,
-                    f64::INFINITY,
+                    Num::INFINITY,
+                    Num::INFINITY,
                     fill,
                     num_num,
                     num_num
@@ -710,8 +710,8 @@ fn reduce_table_bytes(
                     ys,
                     to_left(min::num_num),
                     min::com_x,
-                    f64::INFINITY,
-                    f64::INFINITY,
+                    Num::INFINITY,
+                    Num::INFINITY,
                     byte_fill,
                     byte_byte,
                     generic
@@ -726,8 +726,8 @@ fn reduce_table_bytes(
                     ys.convert(),
                     max::num_num,
                     max::com_x,
-                    f64::NEG_INFINITY,
-                    f64::NEG_INFINITY,
+                    Num::NEG_INFINITY,
+                    Num::NEG_INFINITY,
                     fill,
                     num_num,
                     num_num
@@ -738,8 +738,8 @@ fn reduce_table_bytes(
                     ys,
                     to_left(max::num_num),
                     max::com_x,
-                    f64::NEG_INFINITY,
-                    f64::NEG_INFINITY,
+                    Num::NEG_INFINITY,
+                    Num::NEG_INFINITY,
                     byte_fill,
                     byte_byte,
                     generic
@@ -889,9 +889,9 @@ macro_rules! reduce_table_math {
             match f_prim {
                 Primitive::Add => all_gs!(add::$f, add::com_x, 0.0, 0.0),
                 Primitive::Mul => all_gs!(mul::$f, mul::com_x, 1.0, 0.0),
-                Primitive::Min => all_gs!(min::$f, min::com_x, f64::INFINITY, f64::INFINITY),
+                Primitive::Min => all_gs!(min::$f, min::com_x, Num::INFINITY, Num::INFINITY),
                 Primitive::Max => {
-                    all_gs!(max::$f, max::com_x, f64::NEG_INFINITY, f64::NEG_INFINITY)
+                    all_gs!(max::$f, max::com_x, Num::NEG_INFINITY, Num::NEG_INFINITY)
                 }
                 Primitive::Ne if xs.row_count() > 0 => {
                     all_gs!(to(is_ne::$f), to(is_ne::com_x), 0.0, 0.0)
@@ -903,7 +903,7 @@ macro_rules! reduce_table_math {
     };
 }
 
-reduce_table_math!(reduce_table_nums, f64, num_num);
+reduce_table_math!(reduce_table_nums, Num, num_num);
 reduce_table_math!(reduce_coms, Complex, com_x);
 
 /// Fast reduce table list

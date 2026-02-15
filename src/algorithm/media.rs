@@ -16,7 +16,7 @@ use rapidhash::quality::RapidHasher;
 use serde::*;
 
 #[allow(unused_imports)]
-use crate::{Array, Uiua, UiuaResult, Value};
+use crate::{Array, Num, Uiua, UiuaResult, Value};
 #[cfg(feature = "gif")]
 use crate::{ArrayValue, RealArrayValue};
 use crate::{Complex, OptionalArg, Shape, SigNode, SysBackend};
@@ -455,8 +455,8 @@ fn complex_color(c: Complex) -> [f64; 3] {
         (true, false) | (false, true) => return [0.5; 3],
         (false, false) => {}
     }
-    let h = c.arg();
-    let mag = c.abs();
+    let h = c.arg() as f64;
+    let mag = c.abs() as f64;
     let s = (0.3 + 0.7 * (-mag / 10.0).exp()) / (0.3 + 0.7 * (-0.1_f64).exp());
     let v = (1.0 - (-PI * mag).exp()) / (1.0 - (-PI).exp());
     hsv_to_rgb(h, s.min(1.0), v.min(1.0))
@@ -1218,13 +1218,13 @@ pub(crate) fn voxels(val: Value, args: Option<Value>, env: &mut Uiua) -> UiuaRes
             let data: EcoVec<_> = if shape.last() == Some(&2) {
                 shape.pop();
                 shape.push(4);
-                let mut data = eco_vec![0.0; shape.elements()];
+                let mut data = eco_vec![Num::from(0u8); shape.elements()];
                 let slice = data.make_mut();
                 for (i, &c) in arr.data.iter().enumerate() {
                     if i % 2 == 0 {
                         let rgb = complex_color(c);
                         for j in 0..3 {
-                            slice[i / 2 * 4 + j] = rgb[j];
+                            slice[i / 2 * 4 + j] = rgb[j] as Num;
                         }
                     } else {
                         slice[i / 2 * 4 + 3] = c.abs();
@@ -1233,7 +1233,10 @@ pub(crate) fn voxels(val: Value, args: Option<Value>, env: &mut Uiua) -> UiuaRes
                 data
             } else {
                 shape.push(3);
-                arr.data.iter().flat_map(|&c| complex_color(c)).collect()
+                arr.data
+                    .iter()
+                    .flat_map(|&c| complex_color(c).map(|x| x as Num))
+                    .collect()
             };
             Array::new(shape, data)
         }
@@ -1500,7 +1503,7 @@ pub(crate) fn voxels(val: Value, args: Option<Value>, env: &mut Uiua) -> UiuaRes
                     continue;
                 }
                 let factor = fog_mul(depth, 1.0);
-                px[0] = arr.data[index * vox_size] * factor + fog * (1.0 - factor);
+                px[0] = arr.data[index * vox_size] as f64 * factor + fog as f64 * (1.0 - factor);
                 if mode == Mode::GrayA {
                     px[1] = 1.0;
                 }
@@ -1521,13 +1524,14 @@ pub(crate) fn voxels(val: Value, args: Option<Value>, env: &mut Uiua) -> UiuaRes
                 match mode {
                     Mode::Gray | Mode::GrayA => {
                         for i in 0..3 {
-                            px[i] = arr.data[index * vox_size] * factor + fog[i] * (1.0 - factor);
+                            px[i] = arr.data[index * vox_size] as f64 * factor
+                                + fog[i] as f64 * (1.0 - factor);
                         }
                     }
                     Mode::Rgb | Mode::Rgba => {
                         for i in 0..3 {
-                            px[i] =
-                                arr.data[index * vox_size + i] * factor + fog[i] * (1.0 - factor);
+                            px[i] = arr.data[index * vox_size + i] as f64 * factor
+                                + fog[i] as f64 * (1.0 - factor);
                         }
                     }
                 }
@@ -1550,7 +1554,7 @@ pub(crate) fn voxels(val: Value, args: Option<Value>, env: &mut Uiua) -> UiuaRes
                     if depth == f64::INFINITY {
                         continue;
                     }
-                    px[0] = arr.data[index * vox_size];
+                    px[0] = arr.data[index * vox_size] as f64;
                     if mode == Mode::GrayA {
                         px[1] = 1.0;
                     }
@@ -1569,7 +1573,7 @@ pub(crate) fn voxels(val: Value, args: Option<Value>, env: &mut Uiua) -> UiuaRes
                         continue;
                     }
                     for i in 0..color_size {
-                        px[i] = arr.data[index * vox_size + i];
+                        px[i] = arr.data[index * vox_size + i] as f64;
                     }
                     if matches!(mode, Mode::Rgba) {
                         px[3] = 1.0;
@@ -1590,10 +1594,10 @@ pub(crate) fn voxels(val: Value, args: Option<Value>, env: &mut Uiua) -> UiuaRes
         if depth_buf[im_index] < dist {
             continue;
         }
-        let vox_alpha = arr.data[arr_index * vox_size + color_size];
+        let vox_alpha = arr.data[arr_index * vox_size + color_size] as f64;
         for i in 0..color_size {
             let bg = image[im_index * pix_size + i];
-            let fg = arr.data[arr_index * vox_size + i];
+            let fg = arr.data[arr_index * vox_size + i] as f64;
             let new = (1.0 - vox_alpha) * bg + vox_alpha * fg;
             image[im_index * pix_size + i] = new;
         }
@@ -1603,7 +1607,7 @@ pub(crate) fn voxels(val: Value, args: Option<Value>, env: &mut Uiua) -> UiuaRes
             let factor = fog_mul(dist, vox_alpha);
             for i in 0..color_size {
                 image[im_index * pix_size + i] =
-                    image[im_index * pix_size + i] * factor + fog[i] * (1.0 - factor);
+                    image[im_index * pix_size + i] * factor + fog[i] as f64 * (1.0 - factor);
             }
         }
     }
@@ -1928,14 +1932,15 @@ impl Value {
         let mut shape = self.shape.clone();
 
         // Get coords
-        let (n, coords) = match self {
+        let (n, coords): (usize, Cow<[f64]>) = match self {
             Value::Num(arr) => {
                 if arr.rank() == 0 {
                     arr.data[0].to_bits().hash(&mut hasher);
                     return Ok(hasher_uniform(hasher).into());
                 }
                 let n = shape.pop().unwrap();
-                (n, Cow::Borrowed(arr.data.as_slice()))
+                let data = Cow::Owned(arr.data.iter().map(|&x| x as f64).collect());
+                (n, data)
             }
             Value::Byte(arr) => {
                 if arr.rank() == 0 {
@@ -1948,7 +1953,7 @@ impl Value {
             }
             Value::Complex(arr) => (
                 2,
-                Cow::Owned(arr.data.iter().flat_map(|&c| [c.re, c.im]).collect()),
+                Cow::Owned(arr.data.iter().flat_map(|&c| [c.re as f64, c.im as f64]).collect()),
             ),
             value => {
                 return Err(env.error(format!(

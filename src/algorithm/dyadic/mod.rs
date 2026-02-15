@@ -21,7 +21,7 @@ use rayon::prelude::*;
 use smallvec::SmallVec;
 
 use crate::{
-    Complex, Primitive, RNG, Shape, Uiua, UiuaResult,
+    Complex, Num, Primitive, RNG, Shape, Uiua, UiuaResult,
     algorithm::pervade::{self, InfalliblePervasiveFn, bin_pervade_recursive},
     array::*,
     boxed::Boxed,
@@ -1024,7 +1024,7 @@ pub(super) fn pad_keep_counts<'a>(
                 }
                 match fill.value.rank() {
                     0 => {
-                        let fill_val = fill.value.data[0];
+                        let fill_val = fill.value.data[0] as f64;
                         let amount = amount.to_mut();
                         let count = len - amount.len();
                         amount.extend(repeat_n(fill_val, count));
@@ -1035,7 +1035,9 @@ pub(super) fn pad_keep_counts<'a>(
                     1 => {
                         let amount = amount.to_mut();
                         let count = len - amount.len();
-                        amount.extend((fill.value.data.iter().copied().cycle()).take(count));
+                        amount.extend(
+                            (fill.value.data.iter().map(|&n| n as f64).cycle()).take(count),
+                        );
                         if fill.is_left() {
                             amount.rotate_right(count);
                         }
@@ -1391,7 +1393,7 @@ impl<T: ArrayValue> Array<T> {
 }
 
 impl Value {
-    pub(crate) fn matrix_div(&self, other: &Self, env: &Uiua) -> UiuaResult<Array<f64>> {
+    pub(crate) fn matrix_div(&self, other: &Self, env: &Uiua) -> UiuaResult<Array<Num>> {
         match (self, other) {
             (Value::Num(a), Value::Num(b)) => a.matrix_div(b, env),
             (Value::Num(a), Value::Byte(b)) => a.matrix_div(&b.convert_ref(), env),
@@ -1406,7 +1408,7 @@ impl Value {
     }
 }
 
-impl Array<f64> {
+impl Array<Num> {
     pub(crate) fn matrix_mul(&self, other: &Self, env: &Uiua) -> UiuaResult<Self> {
         let (a, b) = (self, other);
         let a_row_shape = a.shape.row();
@@ -1424,15 +1426,16 @@ impl Array<f64> {
         };
         let prod_row_shape = prod_shape.row();
         let prod_elems = prod_row_shape.elements();
-        let mut result_data = eco_vec![0.0; self.row_count() * other.row_count() * prod_elems];
+        let mut result_data =
+            eco_vec![Num::from(0u8); self.row_count() * other.row_count() * prod_elems];
         let result_slice = result_data.make_mut();
         let mut result_shape = Shape::from([a.row_count(), b.row_count()]);
         result_shape.extend(prod_row_shape.iter().copied());
-        let inner = |a_row: &[f64], res_row: &mut [f64]| {
+        let inner = |a_row: &[Num], res_row: &mut [Num]| {
             if a_row.is_empty() {
                 return;
             }
-            let mut prod_row = vec![0.0; prod_shape.elements()];
+            let mut prod_row = vec![Num::from(0u8); prod_shape.elements()];
             let mut i = 0;
             for b_row in b.row_slices() {
                 _ = bin_pervade_recursive(
@@ -2025,6 +2028,7 @@ impl Value {
         let Ok(range_bound) = self.as_num(env, None) else {
             return fallback(self, &from, env);
         };
+        let range_bound = range_bound as Num;
 
         if range_bound.fract() != 0.0 || range_bound.is_infinite() || range_bound.is_nan() {
             return fallback(self, &from, env);
@@ -2036,7 +2040,9 @@ impl Value {
                     nums.data
                         .iter()
                         .map(|&number| {
-                            number.fract() == 0.0 && number >= 0.0 && number < range_bound
+                            number.fract() == 0.0
+                                && number >= Num::from(0u8)
+                                && number < range_bound
                         })
                         .map(Into::into)
                         .collect()
@@ -2044,7 +2050,9 @@ impl Value {
                     nums.data
                         .iter()
                         .map(|&number| {
-                            number.fract() == 0.0 && number < 0.0 && number >= range_bound
+                            number.fract() == 0.0
+                                && number < Num::from(0u8)
+                                && number >= range_bound
                         })
                         .map(Into::into)
                         .collect()
@@ -2055,7 +2063,7 @@ impl Value {
             Value::Byte(mut bytes) => {
                 if range_bound > 0.0 {
                     for b in bytes.data.as_mut_slice() {
-                        *b = ((*b as f64) < range_bound) as u8;
+                        *b = ((*b as Num) < range_bound) as u8;
                     }
                 } else {
                     for b in bytes.data.as_mut_slice() {
@@ -2087,6 +2095,7 @@ impl Value {
         else {
             return fallback(of, &elems, env);
         };
+        let bound: EcoVec<Num> = bound.iter().map(|&b| b as Num).collect();
 
         if !(elems.rank() == 0 || elems.shape.ends_with(&[bound.len()])) {
             let new_shape = &elems.shape[..elems.rank() - 1];
@@ -2103,7 +2112,9 @@ impl Value {
                         .row_slices()
                         .map(|row| {
                             row.iter().zip(bound.iter()).all(|(&r, &b)| {
-                                r.fract() == 0.0 && r >= b.min(0.0) && r < b.max(0.0)
+                                r.fract() == 0.0
+                                    && r >= b.min(Num::from(0u8))
+                                    && r < b.max(Num::from(0u8))
                             })
                         })
                         .map(Into::into)
@@ -2113,7 +2124,7 @@ impl Value {
                 Value::Byte(bytes) => {
                     let data: EcoVec<u8> = bytes
                         .row_slices()
-                        .map(|row| row.iter().zip(bound.iter()).all(|(&r, &b)| (r as f64) < b))
+                        .map(|row| row.iter().zip(bound.iter()).all(|(&r, &b)| (r as Num) < b))
                         .map(Into::into)
                         .collect();
                     Array::new(&bytes.shape[..1], data).into()
@@ -2329,10 +2340,10 @@ impl Value {
                 (arr.into(), denom.into())
             }
             Value::Num(mut arr) => {
-                let mut denom_data = eco_vec![1.0; arr.element_count()];
+                let mut denom_data = eco_vec![Num::from(1u8); arr.element_count()];
                 for (f, d) in (arr.data.as_mut_slice().iter_mut()).zip(denom_data.make_mut()) {
                     if f.is_finite() {
-                        let gcd = pervade::or::num_num(*f, 1.0);
+                        let gcd = pervade::or::num_num(*f, Num::from(1u8));
                         let num = *f / gcd;
                         *d = (num / *f).round();
                         *f = num.round();
@@ -2340,8 +2351,8 @@ impl Value {
                         *f = f.signum();
                         *d = 0.0;
                     } else {
-                        *f = f64::NAN;
-                        *d = f64::NAN;
+                        *f = Num::NAN;
+                        *d = Num::NAN;
                     }
                 }
                 let denom = Array::new(arr.shape.clone(), denom_data);

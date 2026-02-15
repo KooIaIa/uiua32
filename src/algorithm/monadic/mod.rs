@@ -22,7 +22,7 @@ use time::{Date, Month, OffsetDateTime, Time};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
-    Boxed, Complex, Primitive, Shape, Uiua, UiuaResult, WILDCARD_NAN,
+    Boxed, Complex, Num, Primitive, Shape, Uiua, UiuaResult, WILDCARD_NAN,
     array::*,
     cowslice::{CowSlice, cowslice},
     grid_fmt::{GridFmt, format_char_inner_repr},
@@ -232,13 +232,29 @@ impl Value {
                     (Some((re, im)), None, _) | (None, Some((re, im)), _) => {
                         let re = parse_uiua_num(re.into(), env);
                         let im = parse_uiua_num(im.into(), env);
-                        re.and_then(|re| im.map(|im| Complex { re, im }.into()))
+                        re.and_then(|re| {
+                            im.map(|im| {
+                                Complex {
+                                    re: re as Num,
+                                    im: im as Num,
+                                }
+                                .into()
+                            })
+                        })
                             .or_else(|e| env.value_fill().map(|fv| fv.value.clone()).ok_or(e))?
                     }
                     (_, _, Some((re, im))) => {
                         let re = parse_uiua_num(re.into(), env);
                         let im = parse_uiua_num(im.into(), env);
-                        re.and_then(|re| im.map(|im| Complex { re, im: -im }.into()))
+                        re.and_then(|re| {
+                            im.map(|im| {
+                                Complex {
+                                    re: re as Num,
+                                    im: -im as Num,
+                                }
+                                .into()
+                            })
+                        })
                             .or_else(|e| env.value_fill().map(|fv| fv.value.clone()).ok_or(e))?
                     }
                     _ => parse_uiua_num(s.into(), env)
@@ -583,7 +599,7 @@ impl Value {
             match self {
                 Value::Box(b) => b.into_scalar().unwrap().0.unparse_base(base, env)?,
                 Value::Byte(n) => unparse_base_num(*n.as_scalar().unwrap() as f64)?.into(),
-                Value::Num(n) => unparse_base_num(*n.as_scalar().unwrap())?.into(),
+                Value::Num(n) => unparse_base_num(*n.as_scalar().unwrap() as f64)?.into(),
                 val => {
                     return Err(env.error(format!(
                         "Cannot unparse {} array in base {base}",
@@ -598,8 +614,11 @@ impl Value {
                         Self::padded(c.value, c.is_right(), arr, base, unparse_base_num, env)?
                             .into()
                     } else {
-                        let new_data: CowSlice<Boxed> =
-                            (arr.data.iter().copied().map(unparse_base_num))
+                        let new_data: CowSlice<Boxed> = (arr
+                            .data
+                            .iter()
+                            .copied()
+                            .map(|n| unparse_base_num(n as f64)))
                                 .map(|v| v.map(Value::from))
                                 .map(|v| v.map(Boxed))
                                 .collect::<UiuaResult<_>>()?;
@@ -1831,10 +1850,10 @@ impl Value {
                 arr.into()
             }
             1 => {
-                validate_size::<f64>([total], env)?;
+                validate_size::<Num>([total], env)?;
                 let mut data = EcoVec::with_capacity(total);
                 for (i, &b) in counts.data.iter().enumerate() {
-                    let i = i as f64;
+                    let i = i as Num;
                     for _ in 0..b {
                         data.push(i);
                     }
@@ -1842,14 +1861,14 @@ impl Value {
                 Array::from(data).into()
             }
             _ => {
-                validate_size::<f64>([total, counts.rank()], env)?;
+                validate_size::<Num>([total, counts.rank()], env)?;
                 let mut data = EcoVec::with_capacity(total * counts.rank());
                 for (i, &b) in counts.data.iter().enumerate() {
                     for _ in 0..b {
                         let mut i = i;
                         let start = data.len();
                         for &d in counts.shape.iter().rev() {
-                            data.insert(start, (i % d) as f64);
+                            data.insert(start, (i % d) as Num);
                             i /= d;
                         }
                     }
@@ -1863,11 +1882,11 @@ impl Value {
         Ok(val)
     }
     /// Get the `first` index `where` the value is nonzero
-    pub fn first_where(&self, env: &Uiua) -> UiuaResult<Array<f64>> {
+    pub fn first_where(&self, env: &Uiua) -> UiuaResult<Array<Num>> {
         self.first_where_impl(env, "first", identity, identity)
     }
     /// Get the last index `where` the value is nonzero
-    pub fn last_where(&self, env: &Uiua) -> UiuaResult<Array<f64>> {
+    pub fn last_where(&self, env: &Uiua) -> UiuaResult<Array<Num>> {
         self.first_where_impl(env, "last", Iterator::rev, Iterator::rev)
     }
     fn first_where_impl<'a, B, N>(
@@ -1875,11 +1894,11 @@ impl Value {
         env: &Uiua,
         name: &str,
         byte_iter: impl Fn(iter::Enumerate<slice::Iter<'a, u8>>) -> B,
-        num_iter: impl Fn(iter::Enumerate<slice::Iter<'a, f64>>) -> N,
-    ) -> UiuaResult<Array<f64>>
+        num_iter: impl Fn(iter::Enumerate<slice::Iter<'a, Num>>) -> N,
+    ) -> UiuaResult<Array<Num>>
     where
         B: Iterator<Item = (usize, &'a u8)>,
-        N: Iterator<Item = (usize, &'a f64)>,
+        N: Iterator<Item = (usize, &'a Num)>,
     {
         if self.rank() <= 1 {
             match self {
@@ -1889,20 +1908,20 @@ impl Value {
                             return Err(env.error("Argument to where must be an array of naturals"));
                         }
                         if *n != 0.0 {
-                            return Ok(Array::scalar(i as f64));
+                            return Ok(Array::scalar(i as Num));
                         }
                     }
-                    env.scalar_fill::<f64>()
+                    env.scalar_fill::<Num>()
                         .map(|fv| fv.value.into())
                         .map_err(|e| env.error(format!("Cannot take {name} of an empty array{e}")))
                 }
                 Value::Byte(bytes) => {
                     for (i, n) in byte_iter(bytes.data.iter().enumerate()) {
                         if *n != 0 {
-                            return Ok(Array::scalar(i as f64));
+                            return Ok(Array::scalar(i as Num));
                         }
                     }
-                    env.scalar_fill::<f64>()
+                    env.scalar_fill::<Num>()
                         .map(|fv| fv.value.into())
                         .map_err(|e| env.error(format!("Cannot take {name} of an empty array{e}")))
                 }
@@ -1922,13 +1941,13 @@ impl Value {
                             let mut i = i;
                             let mut res = Vec::with_capacity(nums.rank());
                             for &d in nums.shape.iter().rev() {
-                                res.insert(0, (i % d) as f64);
+                                res.insert(0, (i % d) as Num);
                                 i /= d;
                             }
                             return Ok(Array::from_iter(res));
                         }
                     }
-                    env.scalar_fill::<f64>()
+                    env.scalar_fill::<Num>()
                         .map(|fv| fv.value.into())
                         .map_err(|e| env.error(format!("Cannot take {name} of an empty array{e}")))
                 }
@@ -1938,13 +1957,13 @@ impl Value {
                             let mut i = i;
                             let mut res = Vec::with_capacity(bytes.rank());
                             for &d in bytes.shape.iter().rev() {
-                                res.insert(0, (i % d) as f64);
+                                res.insert(0, (i % d) as Num);
                                 i /= d;
                             }
                             return Ok(Array::from_iter(res));
                         }
                     }
-                    env.scalar_fill::<f64>()
+                    env.scalar_fill::<Num>()
                         .map(|fv| fv.value.into())
                         .map_err(|e| env.error(format!("Cannot take {name} of an empty array{e}")))
                 }
@@ -1955,7 +1974,7 @@ impl Value {
             }
         }
     }
-    pub(crate) fn len_where(&self, env: &Uiua) -> UiuaResult<f64> {
+    pub(crate) fn len_where(&self, env: &Uiua) -> UiuaResult<Num> {
         match self {
             Value::Num(nums) => {
                 let mut len = 0.0;
@@ -1972,7 +1991,7 @@ impl Value {
             }
             Value::Byte(bytes) => {
                 // `abs` in needed to fix some weird behavior on WASM
-                Ok(bytes.data.iter().map(|&n| n as f64).sum::<f64>().abs())
+                Ok(bytes.data.iter().map(|&n| n as Num).sum::<Num>().abs())
             }
             value => Err(env.error(format!(
                 "Argument to where must be an array of naturals, but it is {}",
@@ -2267,18 +2286,18 @@ impl<T: ArrayValue> Array<T> {
 }
 
 impl Value {
-    pub(crate) fn primes(&self, env: &Uiua) -> UiuaResult<Array<f64>> {
+    pub(crate) fn primes(&self, env: &Uiua) -> UiuaResult<Array<Num>> {
         match self {
             Value::Num(n) => n.primes(env),
-            Value::Byte(b) => b.convert_ref::<f64>().primes(env),
+            Value::Byte(b) => b.convert_ref::<Num>().primes(env),
             value => Err(env.error(format!("Cannot get primes of {} array", value.type_name()))),
         }
     }
 }
 
-impl Array<f64> {
-    pub(crate) fn primes(&self, env: &Uiua) -> UiuaResult<Array<f64>> {
-        fn check_number(x: f64, env: &Uiua, upper_bound: f64) -> UiuaResult<()> {
+impl Array<Num> {
+    pub(crate) fn primes(&self, env: &Uiua) -> UiuaResult<Array<Num>> {
+        fn check_number(x: Num, env: &Uiua, upper_bound: Num) -> UiuaResult<()> {
             if x <= 0.0 {
                 return Err(env.error(format!(
                     "Cannot get primes of non-positive number {}",
@@ -2303,7 +2322,7 @@ impl Array<f64> {
         if self.data.len() == 1 {
             // When "scalar" (i.e. length-one), allow reaching u64 instead of usize
             let n = self.data[0];
-            check_number(n, env, u64::MAX as f64)?;
+            check_number(n, env, u64::MAX as Num)?;
 
             let mut n = n as u64; // note: u64, not usize
 
@@ -2311,19 +2330,19 @@ impl Array<f64> {
 
             while n.is_multiple_of(2) {
                 n /= 2;
-                divisors.push(2.0f64);
+                divisors.push(2.0);
             }
 
             let mut d = 3;
             while d * d <= n {
                 while n.is_multiple_of(d) {
-                    divisors.push(d as f64);
+                    divisors.push(d as Num);
                     n /= d;
                 }
                 d += 2;
             }
             if n != 1 {
-                divisors.push(n as f64)
+                divisors.push(n as Num)
             }
 
             let mut shape = self.shape.clone();
@@ -2333,7 +2352,7 @@ impl Array<f64> {
             let mut max = 0;
             // Validate nums and calc max
             for &n in &self.data {
-                check_number(n, env, u32::MAX as f64)?;
+                check_number(n, env, u32::MAX as Num)?;
                 max = max.max(n as usize);
             }
             validate_size::<usize>([max, 2], env)?;
@@ -2383,7 +2402,7 @@ impl Array<f64> {
             let mut k = 0;
             for (i, len) in lengths.into_iter().enumerate() {
                 for j in (longest - len)..longest {
-                    data_slice[j * self.data.len() + i] = factors[k] as f64;
+                    data_slice[j * self.data.len() + i] = factors[k] as Num;
                     k += 1;
                 }
             }
@@ -2399,7 +2418,7 @@ impl Value {
     pub fn rgb_to_hsv(self, env: &Uiua) -> UiuaResult<Self> {
         match self {
             Value::Num(arr) => arr.rgb_to_hsv(env).map(Into::into),
-            Value::Byte(arr) => arr.convert_ref::<f64>().rgb_to_hsv(env).map(Into::into),
+            Value::Byte(arr) => arr.convert_ref::<Num>().rgb_to_hsv(env).map(Into::into),
             val => Err(env.error(format!("Cannot convert {} to HSV", val.type_name_plural()))),
         }
     }
@@ -2407,13 +2426,13 @@ impl Value {
     pub fn hsv_to_rgb(self, env: &Uiua) -> UiuaResult<Self> {
         match self {
             Value::Num(arr) => arr.hsv_to_rgb(env).map(Into::into),
-            Value::Byte(arr) => arr.convert_ref::<f64>().hsv_to_rgb(env).map(Into::into),
+            Value::Byte(arr) => arr.convert_ref::<Num>().hsv_to_rgb(env).map(Into::into),
             val => Err(env.error(format!("Cannot convert {} to RGB", val.type_name_plural()))),
         }
     }
 }
 
-impl Array<f64> {
+impl Array<Num> {
     /// Convert an array from RGB to HSV
     pub fn rgb_to_hsv(mut self, env: &Uiua) -> UiuaResult<Self> {
         if !(self.shape.ends_with(&[3]) || self.shape.ends_with(&[4])) {
@@ -2433,7 +2452,7 @@ impl Array<f64> {
             let delta = max - min;
             let recip_delta = if delta != 0.0 { 1.0 / delta } else { 0.0 };
             let h = if delta != 0.0 {
-                (TAU * if max == r {
+                ((TAU as Num) * if max == r {
                     ((g - b) * recip_delta).rem_euclid(6.0)
                 } else if max == g {
                     (b - r).mul_add(recip_delta, 2.0)
@@ -2467,10 +2486,10 @@ impl Array<f64> {
             let [h, s, v, ..] = *hsv else {
                 unreachable!();
             };
-            let [r, g, b] = hsv_to_rgb(h, s, v);
-            hsv[0] = r;
-            hsv[1] = g;
-            hsv[2] = b;
+            let [r, g, b] = hsv_to_rgb(h as f64, s as f64, v as f64);
+            hsv[0] = r as Num;
+            hsv[1] = g as Num;
+            hsv[2] = b as Num;
         }
         self.meta.take_sorted_flags();
         self.validate();
@@ -2495,13 +2514,13 @@ pub(crate) fn hsv_to_rgb(h: f64, s: f64, v: f64) -> [f64; 3] {
     }
 }
 
-fn f64_repr(n: f64) -> String {
+fn num_repr(n: Num) -> String {
     let abs = n.abs();
-    let pos = if abs == PI / 2.0 {
+    let pos = if abs == (PI as Num) / 2.0 {
         "η".into()
-    } else if abs == PI {
+    } else if abs == PI as Num {
         "π".into()
-    } else if abs == TAU {
+    } else if abs == TAU as Num {
         "τ".into()
     } else if abs.is_infinite() {
         "∞".into()
@@ -2527,7 +2546,7 @@ impl Value {
                     } else if n == 1.0 && bool_lit {
                         "True".into()
                     } else {
-                        f64_repr(n)
+                        num_repr(n)
                     }
                 }
                 Value::Byte(arr) => {
@@ -2548,7 +2567,7 @@ impl Value {
                     } else if c == -Complex::I {
                         "¯i".into()
                     } else {
-                        format!("ℂ{} {}", f64_repr(c.im), f64_repr(c.re))
+                        format!("ℂ{} {}", num_repr(c.im), num_repr(c.re))
                     }
                 }
                 Value::Char(arr) => format!("@{}", format_char_inner_repr(arr.data[0])),
@@ -2625,17 +2644,17 @@ impl Value {
         s
     }
     /// Get the `datetime` of a value
-    pub fn datetime(&self, env: &Uiua) -> UiuaResult<Array<f64>> {
+    pub fn datetime(&self, env: &Uiua) -> UiuaResult<Array<Num>> {
         let mut arr = match self {
             Value::Num(arr) => arr.clone(),
             Value::Byte(arr) => arr.convert_ref(),
             value => return Err(env.error(format!("Cannot get datetime of {}", value.type_name()))),
         };
-        let size = validate_size::<f64>(arr.shape.iter().copied().chain([6]), env)?;
+        let size = validate_size::<Num>(arr.shape.iter().copied().chain([6]), env)?;
         let mut new_data = eco_vec![0.0; size];
         let slice = new_data.make_mut();
         for (i, &n) in arr.data.iter().enumerate() {
-            let dur = time::Duration::checked_seconds_f64(n).ok_or_else(|| {
+            let dur = time::Duration::checked_seconds_f64(n as f64).ok_or_else(|| {
                 env.error(format!("{} is not a valid time", n.grid_string(false)))
             })?;
             let dt = if n >= 0.0 {
@@ -2644,12 +2663,12 @@ impl Value {
                 OffsetDateTime::UNIX_EPOCH.checked_sub(dur)
             }
             .ok_or_else(|| env.error(format!("{} is not a valid time", n.grid_string(false))))?;
-            slice[i * 6] = dt.year() as f64;
-            slice[i * 6 + 1] = dt.month() as u8 as f64;
-            slice[i * 6 + 2] = dt.day() as f64;
-            slice[i * 6 + 3] = dt.hour() as f64;
-            slice[i * 6 + 4] = dt.minute() as f64;
-            slice[i * 6 + 5] = dt.second() as f64;
+            slice[i * 6] = dt.year() as Num;
+            slice[i * 6 + 1] = dt.month() as u8 as Num;
+            slice[i * 6 + 2] = dt.day() as Num;
+            slice[i * 6 + 3] = dt.hour() as Num;
+            slice[i * 6 + 4] = dt.minute() as Num;
+            slice[i * 6 + 5] = dt.second() as Num;
         }
         arr.data = new_data.into();
         arr.shape.push(6);
@@ -2657,7 +2676,7 @@ impl Value {
         arr.validate();
         Ok(arr)
     }
-    pub(crate) fn undatetime(&self, env: &Uiua) -> UiuaResult<Array<f64>> {
+    pub(crate) fn undatetime(&self, env: &Uiua) -> UiuaResult<Array<Num>> {
         let mut arr = match self {
             Value::Num(arr) => arr.clone(),
             Value::Byte(arr) => arr.convert_ref(),
@@ -2665,14 +2684,14 @@ impl Value {
                 return Err(env.error(format!("Cannot decode datetime from {}", value.type_name())));
             }
         };
-        let convert = |chunk: &[f64]| -> UiuaResult<f64> {
-            let mut year = chunk.first().copied().unwrap_or(0.0);
-            let mut month = chunk.get(1).copied().unwrap_or(1.0) - 1.0;
-            let mut day = chunk.get(2).copied().unwrap_or(1.0) - 1.0;
-            let mut hour = chunk.get(3).copied().unwrap_or(0.0);
-            let mut minute = chunk.get(4).copied().unwrap_or(0.0);
-            let mut second = chunk.get(5).copied().unwrap_or(0.0);
-            let mut frac = chunk.get(6).copied().unwrap_or(0.0);
+        let convert = |chunk: &[Num]| -> UiuaResult<Num> {
+            let mut year = chunk.first().copied().unwrap_or(0.0) as f64;
+            let mut month = chunk.get(1).copied().unwrap_or(1.0) as f64 - 1.0;
+            let mut day = chunk.get(2).copied().unwrap_or(1.0) as f64 - 1.0;
+            let mut hour = chunk.get(3).copied().unwrap_or(0.0) as f64;
+            let mut minute = chunk.get(4).copied().unwrap_or(0.0) as f64;
+            let mut second = chunk.get(5).copied().unwrap_or(0.0) as f64;
+            let mut frac = chunk.get(6).copied().unwrap_or(0.0) as f64;
             frac += second.fract();
             second = second.floor();
             second += minute.fract() * 60.0;
@@ -2752,13 +2771,13 @@ impl Value {
             } else if day_delta < 0.0 {
                 dt -= Duration::from_secs_f64(day_delta.abs() * 86400.0);
             }
-            Ok(dt.unix_timestamp() as f64 + frac)
+            Ok((dt.unix_timestamp() as f64 + frac) as Num)
         };
         let [shape_pre @ .., n] = &*arr.shape else {
             return Err(env.error("Cannot decode datetime from scalar"));
         };
         arr.data = if *n == 0 {
-            let size = validate_size::<f64>(shape_pre.iter().copied(), env)?;
+            let size = validate_size::<Num>(shape_pre.iter().copied(), env)?;
             eco_vec![0.0; size].into()
         } else {
             let mut new_data = eco_vec![0.0; arr.data.len() / *n];

@@ -6,7 +6,8 @@ use ecow::EcoVec;
 use uiua_parser::SubSide;
 
 use crate::{
-    Array, ArrayValue, Boxed, Complex, FormatShape, Primitive, Shape, Uiua, UiuaResult, Value,
+    Array, ArrayValue, Boxed, Complex, FormatShape, Num, Primitive, Shape, Uiua, UiuaResult,
+    Value,
     algorithm::{
         ArrayCmpSlice, FillContext, Indexable, max_shape, validate_size_impl, validate_size_of,
     },
@@ -1191,7 +1192,7 @@ impl Value {
         if !allow_ext && value.shape != max_shape || allow_ext && !max_shape.ends_with(&value.shape)
         {
             match &mut value {
-                Value::Num(arr) => match ctx.scalar_fill::<f64>() {
+                Value::Num(arr) => match ctx.scalar_fill::<Num>() {
                     Ok(fill) => arr.fill_to_shape(&max_shape, fill),
                     Err(e) => {
                         return Err(C::fill_error(ctx.error(format!(

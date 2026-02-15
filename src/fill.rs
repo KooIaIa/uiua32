@@ -1,6 +1,6 @@
 use smallvec::SmallVec;
 
-use crate::{Array, Boxed, Complex, SubSide, Uiua, Value};
+use crate::{Array, Boxed, Complex, Num, SubSide, Uiua, Value};
 
 pub struct Fill<'a> {
     env: &'a Uiua,
@@ -118,16 +118,16 @@ impl<'a> Fill<'a> {
             None => Err(self.error(false)),
         }
     }
-    pub(crate) fn num_scalar(&self) -> Result<FillValue<f64>, &'static str> {
+    pub(crate) fn num_scalar(&self) -> Result<FillValue<Num>, &'static str> {
         self.value_map(|val| match val {
             Value::Num(n) if n.rank() == 0 => Ok(n.data[0]),
             Value::Num(_) => Err(self.error(true)),
-            Value::Byte(n) if n.rank() == 0 => Ok(n.data[0] as f64),
+            Value::Byte(n) if n.rank() == 0 => Ok(n.data[0] as Num),
             Value::Byte(_) => Err(self.error(true)),
             _ => Err(self.error(false)),
         })
     }
-    pub(crate) fn num_array(&self) -> Result<FillValue<Array<f64>>, &'static str> {
+    pub(crate) fn num_array(&self) -> Result<FillValue<Array<Num>>, &'static str> {
         self.value_map(|val| match val {
             Value::Num(n) => Ok(n.clone()),
             Value::Byte(n) => Ok(n.convert_ref()),
@@ -193,7 +193,7 @@ impl<'a> Fill<'a> {
         self.value_map(|val| match val {
             Value::Num(n) if n.rank() == 0 => Ok(Complex::new(n.data[0], 0.0)),
             Value::Num(_) => Err(self.error(true)),
-            Value::Byte(n) if n.rank() == 0 => Ok(Complex::new(n.data[0] as f64, 0.0)),
+            Value::Byte(n) if n.rank() == 0 => Ok(Complex::new(n.data[0] as Num, 0.0)),
             Value::Byte(_) => Err(self.error(true)),
             Value::Complex(c) if c.rank() == 0 => Ok(c.data[0]),
             Value::Complex(_) => Err(self.error(true)),

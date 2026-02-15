@@ -3,7 +3,7 @@
 use std::mem::size_of;
 
 use crate::{
-    Ops, Primitive, Shape, SigNode, Signature, Uiua, UiuaResult,
+    Num, Ops, Primitive, Shape, SigNode, Signature, Uiua, UiuaResult,
     algorithm::{FixedRowsData, fixed_rows, get_ops, pervade::pervade_dim},
     array::Array,
     value::Value,
@@ -34,7 +34,7 @@ pub fn repeat(ops: Ops, with_inverse: bool, count_convergence: bool, env: &mut U
     if n.rank() == 0 {
         // Scalar repeat
         let n = rep_count(n, env)?;
-        repeat_impl(f, inv, n.data[0], env)?;
+        repeat_impl(f, inv, n.data[0] as f64, env)?;
         Ok(())
     } else {
         // Array
@@ -88,7 +88,7 @@ fn rep_recur(f: SigNode, inv: Option<SigNode>, mut args: Vec<Value>, env: &mut U
         for arg in args {
             env.push(arg);
         }
-        repeat_impl(f, inv, n.data[0], env)?;
+        repeat_impl(f, inv, n.data[0] as f64, env)?;
         return Ok(());
     }
     let FixedRowsData {
@@ -122,7 +122,7 @@ fn rep_recur(f: SigNode, inv: Option<SigNode>, mut args: Vec<Value>, env: &mut U
     Ok(())
 }
 
-fn rep_count(value: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+fn rep_count(value: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     Ok(match value {
         Value::Num(n) => n,
         Value::Byte(n) => n.convert(),

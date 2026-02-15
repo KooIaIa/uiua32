@@ -4,7 +4,7 @@ use ecow::EcoVec;
 use uiua_parser::SubSide;
 
 use crate::{
-    Array, ArrayValue, Boxed, Node, Primitive, Shape, SigNode, Uiua, UiuaResult, Value,
+    Array, ArrayValue, Boxed, Node, Num, Primitive, Shape, SigNode, Uiua, UiuaResult, Value,
     algorithm::{
         FillContext, MultiOutput,
         pervade::*,
@@ -477,8 +477,8 @@ fn adjacent_impl(f: SigNode, xs: Value, n: usize, env: &mut Uiua) -> UiuaResult 
             Primitive::Atan => fast_adjacent(nums, n, env, atan2::num_num),
             Primitive::Max => fast_adjacent(nums, n, env, max::num_num),
             Primitive::Min => fast_adjacent(nums, n, env, min::num_num),
-            Primitive::Eq => fast_adjacent(nums, n, env, |a, b| is_eq::num_num(a, b) as f64),
-            Primitive::Ne => fast_adjacent(nums, n, env, |a, b| is_ne::num_num(a, b) as f64),
+            Primitive::Eq => fast_adjacent(nums, n, env, |a, b| is_eq::num_num(a, b) as Num),
+            Primitive::Ne => fast_adjacent(nums, n, env, |a, b| is_ne::num_num(a, b) as Num),
             _ => return generic_adjacent(f, Value::Num(nums), n, env),
         }?),
         (Some((prim, flipped)), Value::Byte(bytes)) => env.push::<Value>(match prim {

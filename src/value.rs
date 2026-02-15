@@ -12,7 +12,7 @@ use ecow::EcoVec;
 use serde::*;
 
 use crate::{
-    Boxed, Complex, Shape, Uiua, UiuaResult,
+    Boxed, Complex, Num, Shape, Uiua, UiuaResult,
     algorithm::{ErrorContext, FillContext, pervade::*},
     array::*,
     cowslice::CowSlice,
@@ -29,7 +29,7 @@ pub enum Value {
     /// Byte array used for some boolean operations and for I/O
     Byte(Array<u8>),
     /// Common number array
-    Num(Array<f64>),
+    Num(Array<Num>),
     /// Complex number array
     Complex(Array<Complex>),
     /// Common character array
@@ -113,7 +113,7 @@ impl Value {
         }
     }
     /// Get a reference to a possible number array
-    pub fn as_num_array(&self) -> Option<&Array<f64>> {
+    pub fn as_num_array(&self) -> Option<&Array<Num>> {
         match self {
             Self::Num(array) => Some(array),
             _ => None,
@@ -232,7 +232,7 @@ impl Value {
     pub(crate) fn proxy_scalar(&self, env: &Uiua) -> Self {
         match self {
             Self::Num(_) => (env.scalar_fill().map(|fv| fv.value))
-                .unwrap_or_else(|_| f64::proxy())
+                .unwrap_or(0.0 as Num)
                 .into(),
             Self::Byte(_) => (env.scalar_fill().map(|fv| fv.value))
                 .unwrap_or_else(|_| u8::proxy())
@@ -258,9 +258,7 @@ impl Value {
             Self::Num(_) => Array::new(
                 shape,
                 CowSlice::from_elem(
-                    env.scalar_fill()
-                        .map(|fv| fv.value)
-                        .unwrap_or_else(|_| f64::proxy()),
+                    env.scalar_fill().map(|fv| fv.value).unwrap_or(0.0 as Num),
                     elem_count,
                 ),
             )
@@ -310,7 +308,10 @@ impl Value {
     pub(crate) fn fill(&mut self, env: &Uiua) -> Result<Value, &'static str> {
         self.match_fill(env);
         match self {
-            Value::Num(_) => env.array_fill::<f64>().map(|fv| fv.value).map(Into::into),
+            Value::Num(_) => env
+                .array_fill::<f64>()
+                .map(|fv| fv.value.convert_with(|n| n as Num))
+                .map(Into::into),
             Value::Byte(_) => env.array_fill::<u8>().map(|fv| fv.value).map(Into::into),
             Value::Complex(_) => env
                 .array_fill::<Complex>()
@@ -333,7 +334,7 @@ impl Value {
     }
     pub(crate) fn elem_size(&self) -> usize {
         match self {
-            Self::Num(_) => size_of::<f64>(),
+            Self::Num(_) => size_of::<Num>(),
             Self::Byte(_) => size_of::<u8>(),
             Self::Complex(_) => size_of::<Complex>(),
             Self::Char(_) => size_of::<char>(),
@@ -370,7 +371,7 @@ pub struct ValueRepr {
     /// The value's shape
     pub shape: Shape,
     /// Safety: Do not access this field!
-    __data: CowSlice<f64>,
+    __data: CowSlice<Num>,
     /// The value's metadata
     pub meta: ArrayMeta,
 }
@@ -473,7 +474,7 @@ impl Value {
     pub(crate) fn generic_bin_into<T, E>(
         self,
         other: Self,
-        n: impl FnOnce(Array<f64>, Array<f64>) -> Result<T, E>,
+        n: impl FnOnce(Array<Num>, Array<Num>) -> Result<T, E>,
         _b: impl FnOnce(Array<u8>, Array<u8>) -> Result<T, E>,
         _co: impl FnOnce(Array<Complex>, Array<Complex>) -> Result<T, E>,
         ch: impl FnOnce(Array<char>, Array<char>) -> Result<T, E>,
@@ -501,7 +502,7 @@ impl Value {
     pub(crate) fn generic_bin_ref<T, E>(
         &self,
         other: &Self,
-        n: impl FnOnce(&Array<f64>, &Array<f64>) -> Result<T, E>,
+        n: impl FnOnce(&Array<Num>, &Array<Num>) -> Result<T, E>,
         _b: impl FnOnce(&Array<u8>, &Array<u8>) -> Result<T, E>,
         _co: impl FnOnce(&Array<Complex>, &Array<Complex>) -> Result<T, E>,
         ch: impl FnOnce(&Array<char>, &Array<char>) -> Result<T, E>,
@@ -529,7 +530,7 @@ impl Value {
     pub(crate) fn generic_bin_mut<T, E>(
         &mut self,
         other: Self,
-        n: impl FnOnce(&mut Array<f64>, Array<f64>) -> Result<T, E>,
+        n: impl FnOnce(&mut Array<Num>, Array<Num>) -> Result<T, E>,
         _b: impl FnOnce(&mut Array<u8>, Array<u8>) -> Result<T, E>,
         _co: impl FnOnce(&mut Array<Complex>, Array<Complex>) -> Result<T, E>,
         ch: impl FnOnce(&mut Array<char>, Array<char>) -> Result<T, E>,
@@ -628,7 +629,7 @@ impl Value {
 
 pub(crate) trait ScalarNum: Copy {
     fn from_u8(u: u8) -> Result<Self, FromU8Error>;
-    fn from_f64(f: f64) -> Result<Self, FromF64Error>;
+    fn from_num(f: Num) -> Result<Self, FromF64Error>;
 }
 
 pub(crate) enum FromU8Error {
@@ -669,14 +670,14 @@ impl ScalarNum for usize {
     fn from_u8(u: u8) -> Result<Self, FromU8Error> {
         Ok(u as usize)
     }
-    fn from_f64(f: f64) -> Result<Self, FromF64Error> {
+    fn from_num(f: Num) -> Result<Self, FromF64Error> {
         if f.is_nan() {
             Err(FromF64Error::NaN)
         } else if f.is_infinite() {
             Err(FromF64Error::Infinite)
         } else if f.fract() != 0.0 {
             Err(FromF64Error::NonInteger)
-        } else if f > usize::MAX as f64 {
+        } else if f > usize::MAX as Num {
             Err(FromF64Error::TooHigh)
         } else if f < 0.0 {
             Err(FromF64Error::TooLow)
@@ -690,16 +691,16 @@ impl ScalarNum for isize {
     fn from_u8(u: u8) -> Result<Self, FromU8Error> {
         Ok(u as isize)
     }
-    fn from_f64(f: f64) -> Result<Self, FromF64Error> {
+    fn from_num(f: Num) -> Result<Self, FromF64Error> {
         if f.is_nan() {
             Err(FromF64Error::NaN)
         } else if f.is_infinite() {
             Err(FromF64Error::Infinite)
         } else if f.fract() != 0.0 {
             Err(FromF64Error::NonInteger)
-        } else if f > isize::MAX as f64 {
+        } else if f > isize::MAX as Num {
             Err(FromF64Error::TooHigh)
-        } else if f < isize::MIN as f64 {
+        } else if f < isize::MIN as Num {
             Err(FromF64Error::TooLow)
         } else {
             Ok(f as isize)
@@ -711,14 +712,14 @@ impl ScalarNum for i64 {
     fn from_u8(u: u8) -> Result<Self, FromU8Error> {
         Ok(u as i64)
     }
-    fn from_f64(f: f64) -> Result<Self, FromF64Error> {
+    fn from_num(f: Num) -> Result<Self, FromF64Error> {
         if f.is_nan() {
             Err(FromF64Error::NaN)
         } else if f.is_infinite() {
             Err(FromF64Error::Infinite)
-        } else if f > i64::MAX as f64 {
+        } else if f > i64::MAX as Num {
             Err(FromF64Error::TooHigh)
-        } else if f < i64::MIN as f64 {
+        } else if f < i64::MIN as Num {
             Err(FromF64Error::TooLow)
         } else if f.fract() != 0.0 {
             Err(FromF64Error::NonInteger)
@@ -732,14 +733,14 @@ impl ScalarNum for Result<isize, bool> {
     fn from_u8(u: u8) -> Result<Self, FromU8Error> {
         Ok(Ok(u as isize))
     }
-    fn from_f64(f: f64) -> Result<Self, FromF64Error> {
+    fn from_num(f: Num) -> Result<Self, FromF64Error> {
         if f.is_nan() {
             Err(FromF64Error::NaN)
         } else if f.is_infinite() {
             Ok(Err(f.is_sign_negative()))
-        } else if f > isize::MAX as f64 {
+        } else if f > isize::MAX as Num {
             Err(FromF64Error::TooHigh)
-        } else if f < isize::MIN as f64 {
+        } else if f < isize::MIN as Num {
             Err(FromF64Error::TooLow)
         } else if f.fract() != 0.0 {
             Err(FromF64Error::NonInteger)
@@ -753,8 +754,8 @@ impl ScalarNum for Option<isize> {
     fn from_u8(u: u8) -> Result<Self, FromU8Error> {
         Ok(Some(u as isize))
     }
-    fn from_f64(f: f64) -> Result<Self, FromF64Error> {
-        Result::<isize, bool>::from_f64(f).map(Result::ok)
+    fn from_num(f: Num) -> Result<Self, FromF64Error> {
+        Result::<isize, bool>::from_num(f).map(Result::ok)
     }
 }
 
@@ -762,11 +763,11 @@ impl ScalarNum for Option<usize> {
     fn from_u8(u: u8) -> Result<Self, FromU8Error> {
         Ok(Some(u as usize))
     }
-    fn from_f64(f: f64) -> Result<Self, FromF64Error> {
-        if f == f64::INFINITY {
+    fn from_num(f: Num) -> Result<Self, FromF64Error> {
+        if f == Num::INFINITY {
             Ok(None)
         } else {
-            usize::from_f64(f).map(Some)
+            usize::from_num(f).map(Some)
         }
     }
 }
@@ -775,12 +776,12 @@ impl ScalarNum for u8 {
     fn from_u8(u: u8) -> Result<Self, FromU8Error> {
         Ok(u)
     }
-    fn from_f64(f: f64) -> Result<Self, FromF64Error> {
+    fn from_num(f: Num) -> Result<Self, FromF64Error> {
         if f.is_nan() {
             Err(FromF64Error::NaN)
         } else if f.is_infinite() {
             Err(FromF64Error::Infinite)
-        } else if f > u8::MAX as f64 {
+        } else if f > u8::MAX as Num {
             Err(FromF64Error::TooHigh)
         } else if f < 0.0 {
             Err(FromF64Error::TooLow)
@@ -796,12 +797,12 @@ impl ScalarNum for u16 {
     fn from_u8(u: u8) -> Result<Self, FromU8Error> {
         Ok(u as u16)
     }
-    fn from_f64(f: f64) -> Result<Self, FromF64Error> {
+    fn from_num(f: Num) -> Result<Self, FromF64Error> {
         if f.is_nan() {
             Err(FromF64Error::NaN)
         } else if f.is_infinite() {
             Err(FromF64Error::Infinite)
-        } else if f > u16::MAX as f64 {
+        } else if f > u16::MAX as Num {
             Err(FromF64Error::TooHigh)
         } else if f < 0.0 {
             Err(FromF64Error::TooLow)
@@ -821,7 +822,7 @@ impl ScalarNum for bool {
             _ => Err(FromU8Error::NonBoolean),
         }
     }
-    fn from_f64(f: f64) -> Result<Self, FromF64Error> {
+    fn from_num(f: Num) -> Result<Self, FromF64Error> {
         match f {
             0.0 => Ok(false),
             1.0 => Ok(true),
@@ -834,8 +835,8 @@ impl ScalarNum for f64 {
     fn from_u8(u: u8) -> Result<Self, FromU8Error> {
         Ok(u as f64)
     }
-    fn from_f64(f: f64) -> Result<Self, FromF64Error> {
-        Ok(f)
+    fn from_num(f: Num) -> Result<Self, FromF64Error> {
+        Ok(f as f64)
     }
 }
 
@@ -941,7 +942,10 @@ impl Value {
         if self.rank() <= 1
             && let Value::Num(arr) = self
         {
+            #[cfg(not(feature = "f32_num"))]
             return Ok(Cow::Borrowed(arr.data.as_slice()));
+            #[cfg(feature = "f32_num")]
+            return Ok(Cow::Owned(arr.data.iter().map(|&n| n as f64).collect()));
         }
         let requirement = requirement
             .into()
@@ -961,10 +965,10 @@ impl Value {
             .unwrap_or("Expected value to be array of natural numbers");
         if let Value::Num(arr) = self
             && let Some(&(mut n)) =
-                (arr.data.iter()).find(|&&n| n > usize::MAX as f64 && n.fract() == 0.0)
+                (arr.data.iter()).find(|&&n| n > usize::MAX as Num && n.fract() == 0.0)
         {
             let power = n.log10().floor() as i32;
-            n /= 10f64.powi(power);
+            n /= (10.0 as Num).powi(power);
             return Err(ctx.error(format!("{requirement}, but {n}e{power} is too large")));
         }
         self.as_number_list(ctx, requirement)
@@ -1039,7 +1043,7 @@ impl Value {
         Ok(match self {
             Value::Num(nums) => {
                 let n = nums.data[0];
-                T::from_f64(n).map_err(|e| {
+                T::from_num(n).map_err(|e| {
                     ctx.error(format!(
                         "{requirement}, but {} is {e}",
                         n.grid_string(false)
@@ -1078,7 +1082,7 @@ impl Value {
                 }
                 let mut result = Vec::with_capacity(nums.row_count());
                 for &num in &nums.data {
-                    result.push(T::from_f64(num).map_err(|e| {
+                    result.push(T::from_num(num).map_err(|e| {
                         ctx.error(format!(
                             "{requirement}, but {} is {e}",
                             num.grid_string(false)
@@ -1124,10 +1128,10 @@ impl Value {
     ) -> UiuaResult<Array<usize>> {
         if let Value::Num(arr) = self
             && let Some(&(mut n)) =
-                (arr.data.iter()).find(|&&n| n > usize::MAX as f64 && n.fract() == 0.0)
+                (arr.data.iter()).find(|&&n| n > usize::MAX as Num && n.fract() == 0.0)
         {
             let power = n.log10().floor() as i32;
-            n /= 10f64.powi(power);
+            n /= (10.0 as Num).powi(power);
             return Err(env.error(format!(
                 "{requirement}, but {}e{power} is too large",
                 n.grid_string(false)
@@ -1144,7 +1148,7 @@ impl Value {
             Value::Num(nums) => {
                 let mut result = EcoVec::with_capacity(nums.element_count());
                 for &num in &nums.data {
-                    result.push(T::from_f64(num).map_err(|e| {
+                    result.push(T::from_num(num).map_err(|e| {
                         env.error(format!(
                             "{requirement}, but {} is {e}",
                             num.grid_string(false)
@@ -1382,7 +1386,7 @@ impl Value {
                 let mut compress = true;
                 let mut boolean = true;
                 for &n in &nums.data {
-                    if n.fract() != 0.0 || n.is_sign_negative() || n > u8::MAX as f64 {
+                    if n.fract() != 0.0 || n.is_sign_negative() || n > u8::MAX as Num {
                         compress = false;
                         boolean = false;
                         break;
@@ -1521,7 +1525,7 @@ impl Value {
             if ctx.number_only_fill() {
                 let shape = take(&mut arr.shape);
                 let meta = take(&mut arr.meta);
-                let data: EcoVec<f64> = take(&mut arr.data).into_iter().map(|b| b as f64).collect();
+                let data: EcoVec<Num> = take(&mut arr.data).into_iter().map(|b| b as Num).collect();
                 let mut array = Array::new(shape, data);
                 array.meta = meta;
                 *self = array.into();
@@ -1594,15 +1598,81 @@ macro_rules! value_from {
     };
 }
 
-value_from!(f64, Num);
+value_from!(Num, Num);
 value_from!(u8, Byte);
 value_from!(char, Char);
 value_from!(Boxed, Box);
 value_from!(Complex, Complex);
 
+#[cfg(feature = "f32_num")]
+impl From<f64> for Value {
+    fn from(item: f64) -> Self {
+        Self::Num(Array::from(item as Num))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl From<Array<f64>> for Value {
+    fn from(array: Array<f64>) -> Self {
+        Self::Num(array.convert_with(|n| n as Num))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl From<EcoVec<f64>> for Value {
+    fn from(vec: EcoVec<f64>) -> Self {
+        Self::Num(Array::from_iter(vec.into_iter().map(|n| n as Num)))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl<const N: usize> From<[f64; N]> for Value {
+    fn from(array: [f64; N]) -> Self {
+        Self::Num(Array::from_iter(array.into_iter().map(|n| n as Num)))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl<const M: usize, const N: usize> From<[[f64; N]; M]> for Value {
+    fn from(array: [[f64; N]; M]) -> Self {
+        let data: EcoVec<Num> = array.into_iter().flatten().map(|n| n as Num).collect();
+        Self::Num(Array::new([M, N], data))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl From<CowSlice<f64>> for Value {
+    fn from(vec: CowSlice<f64>) -> Self {
+        Self::Num(Array::from_iter(vec.into_iter().map(|n| n as Num)))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl From<(Shape, EcoVec<f64>)> for Value {
+    fn from((shape, data): (Shape, EcoVec<f64>)) -> Self {
+        let data: EcoVec<Num> = data.into_iter().map(|n| n as Num).collect();
+        Self::Num(Array::new(shape, data))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl From<(Shape, CowSlice<f64>)> for Value {
+    fn from((shape, data): (Shape, CowSlice<f64>)) -> Self {
+        let data: EcoVec<Num> = data.into_iter().map(|n| n as Num).collect();
+        Self::Num(Array::new(shape, data))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl FromIterator<f64> for Value {
+    fn from_iter<I: IntoIterator<Item = f64>>(iter: I) -> Self {
+        Self::Num(Array::from_iter(iter.into_iter().map(|n| n as Num)))
+    }
+}
+
 impl FromIterator<usize> for Value {
     fn from_iter<I: IntoIterator<Item = usize>>(iter: I) -> Self {
-        iter.into_iter().map(|i| i as f64).collect()
+        iter.into_iter().map(|i| i as Num).collect()
     }
 }
 
@@ -1620,13 +1690,13 @@ impl From<bool> for Value {
 
 impl From<usize> for Value {
     fn from(i: usize) -> Self {
-        Value::from(i as f64)
+        Value::from(i as Num)
     }
 }
 
 impl From<i64> for Value {
     fn from(i: i64) -> Self {
-        Value::from(i as f64)
+        Value::from(i as Num)
     }
 }
 
@@ -1652,7 +1722,7 @@ impl<'a> From<&'a [&str]> for Value {
 
 impl From<i32> for Value {
     fn from(i: i32) -> Self {
-        Value::from(i as f64)
+        Value::from(i as Num)
     }
 }
 
@@ -1666,14 +1736,14 @@ impl From<Vec<u8>> for Value {
 
 impl<const M: usize, const N: usize> From<[[i32; N]; M]> for Value {
     fn from(array: [[i32; N]; M]) -> Self {
-        let data: EcoVec<f64> = array.into_iter().flatten().map(|n| n as f64).collect();
+        let data: EcoVec<Num> = array.into_iter().flatten().map(|n| n as Num).collect();
         Self::Num(Array::new([M, N], data))
     }
 }
 
 impl<const N: usize> From<[i32; N]> for Value {
     fn from(array: [i32; N]) -> Self {
-        let data: EcoVec<f64> = array.into_iter().map(|n| n as f64).collect();
+        let data: EcoVec<Num> = array.into_iter().map(|n| n as Num).collect();
         Self::Num(Array::new(N, data))
     }
 }
@@ -1893,10 +1963,10 @@ impl Value {
 fn optimize_types(a: Value, b: Value) -> (Value, Value) {
     match (a, b) {
         (Value::Num(a), Value::Byte(b)) if a.element_count() > b.element_count() => {
-            (a.into(), b.convert::<f64>().into())
+            (a.into(), b.convert::<Num>().into())
         }
         (Value::Byte(a), Value::Num(b)) if a.element_count() < b.element_count() => {
-            (a.convert::<f64>().into(), b.into())
+            (a.convert::<Num>().into(), b.into())
         }
         (a, b) => (a, b),
     }
@@ -2416,7 +2486,7 @@ impl PartialEq<i32> for Value {
             return false;
         }
         match self {
-            Value::Num(arr) => arr.data[0] == (*other as f64),
+            Value::Num(arr) => arr.data[0] == (*other as Num),
             Value::Byte(arr) => arr.data[0] as i32 == *other,
             _ => false,
         }

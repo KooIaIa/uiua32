@@ -14,7 +14,7 @@ use rayon::prelude::*;
 use serde::{de::DeserializeOwned, *};
 
 use crate::{
-    Boxed, Complex, ExactDoubleIterator, FfiType, HandleKind, Shape, Value, WILDCARD_CHAR,
+    Boxed, Complex, ExactDoubleIterator, FfiType, HandleKind, Num, Shape, Value, WILDCARD_CHAR,
     WILDCARD_NAN,
     algorithm::{
         ArrayCmpSlice,
@@ -949,11 +949,11 @@ impl From<bool> for Array<u8> {
     }
 }
 
-impl From<Vec<usize>> for Array<f64> {
+impl From<Vec<usize>> for Array<Num> {
     fn from(data: Vec<usize>) -> Self {
         Self::new(
             data.len(),
-            data.into_iter().map(|u| u as f64).collect::<CowSlice<_>>(),
+            data.into_iter().map(|u| u as Num).collect::<CowSlice<_>>(),
         )
     }
 }
@@ -1027,23 +1027,95 @@ fn default_sort_list<T: ArrayCmp + Send>(list: &mut [T], up: bool) {
     }
 }
 
+#[inline(always)]
+fn map_empty_num() -> Num {
+    #[cfg(feature = "f32_num")]
+    {
+        Num::from_bits(0x7fc0_0001)
+    }
+    #[cfg(not(feature = "f32_num"))]
+    {
+        EMPTY_NAN
+    }
+}
+
+#[inline(always)]
+fn map_tombstone_num() -> Num {
+    #[cfg(feature = "f32_num")]
+    {
+        Num::from_bits(0x7fc0_0002)
+    }
+    #[cfg(not(feature = "f32_num"))]
+    {
+        TOMBSTONE_NAN
+    }
+}
+
+#[inline(always)]
+fn wildcard_num() -> Num {
+    WILDCARD_NAN as Num
+}
+
+impl ArrayValue for Num {
+    const NAME: &'static str = "number";
+    const SYMBOL: char = 'ℝ';
+    const TYPE_ID: u8 = 0;
+    fn get_scalar_fill(fill: &Fill) -> Result<FillValue<Self>, &'static str> {
+        fill.num_scalar()
+            .map(|fill| FillValue::new(fill.value as Num, fill.side))
+    }
+    fn get_array_fill(fill: &Fill) -> Result<FillValue<Array<Self>>, &'static str> {
+        fill.num_array()
+            .map(|fill| FillValue::new(fill.value.convert_with(|n| n as Num), fill.side))
+    }
+    fn array_hash<H: Hasher>(&self, hasher: &mut H) {
+        let empty = map_empty_num();
+        let tombstone = map_tombstone_num();
+        let wildcard = wildcard_num();
+        let v = if self.to_bits() == empty.to_bits() {
+            empty
+        } else if self.to_bits() == tombstone.to_bits() {
+            tombstone
+        } else if self.to_bits() == wildcard.to_bits() {
+            wildcard
+        } else if self.is_nan() {
+            Num::NAN
+        } else if *self == 0.0 && self.is_sign_negative() {
+            0.0
+        } else {
+            *self
+        };
+        v.to_bits().hash(hasher)
+    }
+    fn proxy() -> Self {
+        0.0
+    }
+    fn has_wildcard(&self) -> bool {
+        self.to_bits() == wildcard_num().to_bits()
+    }
+    fn is_sortable(&self) -> bool {
+        !self.is_nan()
+    }
+}
+
+#[cfg(feature = "f32_num")]
 impl ArrayValue for f64 {
     const NAME: &'static str = "number";
     const SYMBOL: char = 'ℝ';
     const TYPE_ID: u8 = 0;
     fn get_scalar_fill(fill: &Fill) -> Result<FillValue<Self>, &'static str> {
         fill.num_scalar()
+            .map(|fill| FillValue::new(fill.value as f64, fill.side))
     }
     fn get_array_fill(fill: &Fill) -> Result<FillValue<Array<Self>>, &'static str> {
         fill.num_array()
+            .map(|fill| FillValue::new(fill.value.convert_with(|n| n as f64), fill.side))
     }
     fn array_hash<H: Hasher>(&self, hasher: &mut H) {
         let v = if self.to_bits() == EMPTY_NAN.to_bits() {
             EMPTY_NAN
         } else if self.to_bits() == TOMBSTONE_NAN.to_bits() {
             TOMBSTONE_NAN
-        } else if self.to_bits() == WILDCARD_NAN.to_bits() {
-            WILDCARD_NAN
         } else if self.is_nan() {
             f64::NAN
         } else if *self == 0.0 && self.is_sign_negative() {
@@ -1057,7 +1129,7 @@ impl ArrayValue for f64 {
         0.0
     }
     fn has_wildcard(&self) -> bool {
-        self.to_bits() == WILDCARD_NAN.to_bits()
+        false
     }
     fn is_sortable(&self) -> bool {
         !self.is_nan()
@@ -1066,8 +1138,11 @@ impl ArrayValue for f64 {
 
 #[cfg(test)]
 #[test]
-fn f64_summarize() {
-    assert_eq!(f64::summarize(&[2.0, 6.0, 1.0]), "1-6 μ3");
+fn num_summarize() {
+    assert_eq!(
+        Num::summarize(&[2.0 as Num, 6.0 as Num, 1.0 as Num]),
+        "1-6 μ3"
+    );
 }
 
 impl ArrayValue for u8 {
@@ -1081,7 +1156,7 @@ impl ArrayValue for u8 {
         fill.byte_array()
     }
     fn array_hash<H: Hasher>(&self, hasher: &mut H) {
-        (*self as f64).to_bits().hash(hasher)
+        (*self as Num).to_bits().hash(hasher)
     }
     fn proxy() -> Self {
         0
@@ -1156,7 +1231,7 @@ impl ArrayValue for Boxed {
         self.0.hash(hasher);
     }
     fn proxy() -> Self {
-        Boxed(Array::<f64>::new(0, []).into())
+        Boxed(Array::<Num>::new(0, []).into())
     }
     fn nested_value(&self) -> Option<&Value> {
         Some(&self.0)
@@ -1194,6 +1269,16 @@ pub trait RealArrayValue: ArrayValue + Copy {
     fn to_f64(&self) -> f64;
 }
 
+impl RealArrayValue for Num {
+    fn is_int(&self) -> bool {
+        self.fract().abs() < Num::EPSILON
+    }
+    fn to_f64(&self) -> f64 {
+        *self as f64
+    }
+}
+
+#[cfg(feature = "f32_num")]
 impl RealArrayValue for f64 {
     fn is_int(&self) -> bool {
         self.fract().abs() < f64::EPSILON
@@ -1222,16 +1307,25 @@ pub trait ArrayCmp<U = Self> {
     }
 }
 
-impl ArrayCmp for f64 {
+impl ArrayCmp for Num {
     fn array_cmp(&self, other: &Self) -> Ordering {
         self.partial_cmp(other).unwrap_or_else(|| {
-            if self.to_bits() == WILDCARD_NAN.to_bits() || other.to_bits() == WILDCARD_NAN.to_bits()
+            if self.to_bits() == wildcard_num().to_bits()
+                || other.to_bits() == wildcard_num().to_bits()
             {
                 Ordering::Equal
             } else {
                 self.is_nan().cmp(&other.is_nan())
             }
         })
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl ArrayCmp for f64 {
+    fn array_cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other)
+            .unwrap_or_else(|| self.is_nan().cmp(&other.is_nan()))
     }
 }
 
@@ -1268,12 +1362,26 @@ impl ArrayCmp for Boxed {
     }
 }
 
+impl ArrayCmp<Num> for u8 {
+    fn array_cmp(&self, other: &Num) -> Ordering {
+        (*self as Num).array_cmp(other)
+    }
+}
+
+impl ArrayCmp<u8> for Num {
+    fn array_cmp(&self, other: &u8) -> Ordering {
+        self.array_cmp(&(*other as Num))
+    }
+}
+
+#[cfg(feature = "f32_num")]
 impl ArrayCmp<f64> for u8 {
     fn array_cmp(&self, other: &f64) -> Ordering {
         (*self as f64).array_cmp(other)
     }
 }
 
+#[cfg(feature = "f32_num")]
 impl ArrayCmp<u8> for f64 {
     fn array_cmp(&self, other: &u8) -> Ordering {
         self.array_cmp(&(*other as f64))
@@ -1473,14 +1581,26 @@ impl ArrayValueSer for Complex {
     }
 }
 
-impl ArrayValueSer for f64 {
-    type Scalar = F64Rep;
-    type Collection = Vec<F64Rep>;
+impl ArrayValueSer for Num {
+    type Scalar = NumRep;
+    type Collection = Vec<NumRep>;
     fn make_collection(data: CowSlice<Self>) -> Self::Collection {
         data.iter().map(|&n| n.into()).collect()
     }
     fn make_data(collection: Self::Collection) -> CowSlice<Self> {
-        collection.into_iter().map(f64::from).collect()
+        collection.into_iter().map(Num::from).collect()
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl ArrayValueSer for f64 {
+    type Scalar = f64;
+    type Collection = Vec<f64>;
+    fn make_collection(data: CowSlice<Self>) -> Self::Collection {
+        data.iter().copied().collect()
+    }
+    fn make_data(collection: Self::Collection) -> CowSlice<Self> {
+        collection.into_iter().collect()
     }
 }
 
@@ -1499,7 +1619,7 @@ impl ArrayValueSer for char {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-enum F64Rep {
+enum NumRep {
     #[serde(rename = "NaN")]
     NaN,
     #[serde(rename = "W")]
@@ -1513,17 +1633,17 @@ enum F64Rep {
     #[serde(rename = "-∞")]
     NegInfinity,
     #[serde(untagged)]
-    Num(f64),
+    Num(Num),
 }
 
-impl From<f64> for F64Rep {
-    fn from(n: f64) -> Self {
+impl From<Num> for NumRep {
+    fn from(n: Num) -> Self {
         if n.is_nan() {
-            if n.to_bits() == WILDCARD_NAN.to_bits() {
+            if n.to_bits() == wildcard_num().to_bits() {
                 Self::Wildcard
-            } else if n.to_bits() == EMPTY_NAN.to_bits() {
+            } else if n.to_bits() == map_empty_num().to_bits() {
                 Self::MapEmpty
-            } else if n.to_bits() == TOMBSTONE_NAN.to_bits() {
+            } else if n.to_bits() == map_tombstone_num().to_bits() {
                 Self::MapTombstone
             } else {
                 Self::NaN
@@ -1540,16 +1660,16 @@ impl From<f64> for F64Rep {
     }
 }
 
-impl From<F64Rep> for f64 {
-    fn from(rep: F64Rep) -> Self {
+impl From<NumRep> for Num {
+    fn from(rep: NumRep) -> Self {
         match rep {
-            F64Rep::NaN => f64::NAN,
-            F64Rep::Wildcard => WILDCARD_NAN,
-            F64Rep::MapEmpty => EMPTY_NAN,
-            F64Rep::MapTombstone => TOMBSTONE_NAN,
-            F64Rep::Infinity => f64::INFINITY,
-            F64Rep::NegInfinity => f64::NEG_INFINITY,
-            F64Rep::Num(n) => n,
+            NumRep::NaN => Num::NAN,
+            NumRep::Wildcard => wildcard_num(),
+            NumRep::MapEmpty => map_empty_num(),
+            NumRep::MapTombstone => map_tombstone_num(),
+            NumRep::Infinity => Num::INFINITY,
+            NumRep::NegInfinity => Num::NEG_INFINITY,
+            NumRep::Num(n) => n,
         }
     }
 }
