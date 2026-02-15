@@ -1131,7 +1131,7 @@ pub fn gif_bytes_to_value_impl(
     if let gif::ColorOutput::RGBA = mode {
         shape.push(4)
     }
-    let mut num = Value::Num(Array::new(shape, data));
+    let mut num: Value = Array::new(shape, data).into();
     num.try_shrink();
     Ok((frame_rate, num))
 }

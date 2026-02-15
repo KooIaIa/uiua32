@@ -188,13 +188,6 @@ where
     }
 }
 
-#[cfg(feature = "f32_num")]
-impl From<f64> for ConstantValue {
-    fn from(val: f64) -> Self {
-        ConstantValue::Static(Value::from(val as Num))
-    }
-}
-
 macro_rules! constant {
     ($(
         $(#[doc = $doc:literal])+

@@ -1,0 +1,82 @@
+Temporary f32 Migration Tracker
+Last updated: 2026-02-15
+
+Goal
+- Keep default f64 mode unchanged.
+- Make f32 mode (`--features f32_num`) compile in both no-default and default-feature builds.
+- Keep core Num/Complex math truly f32 in f32 mode.
+
+Current status
+- Pass: `cargo check -p uiua --lib`
+- Pass: `cargo check -p uiua --lib --no-default-features --features f32_num`
+- Pass: `cargo check -p uiua --lib --features f32_num`
+- Pass: `cargo build -p uiua --lib`
+- Pass: `cargo build -p uiua --lib --no-default-features --features f32_num`
+- Pass: `cargo build -p uiua --lib --features f32_num`
+- Pass: `cargo check -p uiua --lib --no-default-features --features "f32_num native_sys"`
+- Tests (f32 no-default+native_sys): `cargo test -p uiua --lib --no-default-features --features "f32_num native_sys"`
+  - Result: 21 passed, 2 failed, 1 ignored
+  - Remaining failing tests: `tests::suite`, `run_prim::tests::prim_docs`
+- Tests (f32 default features): `cargo test -p uiua --lib --features f32_num`
+  - Result: 23 passed, 0 failed, 1 ignored
+- Tests (f64 default features): `cargo test -p uiua --lib`
+  - Result: pass
+
+Completed milestones
+1) Core numeric migration
+- `Value::Num` is `Array<Num>`.
+- `Num = f32` in f32 mode.
+- `Complex` uses parser `ComplexNum`, which is also f32 in f32 mode.
+- Key algorithm paths are migrated to `Num` in core runtime modules (including GA and dyadic/monadic paths).
+
+2) Full default-feature f32 compile support
+- Reintroduced f32-only compatibility bridges in `src/value.rs`:
+  - `From<f64> for Value`
+  - `From<Array<f64>> for Value`
+  - `From<EcoVec<f64>>`, `From<CowSlice<f64>>`, `(Shape, ...)`, array forms, `FromIterator<f64>`
+- Purpose: keep optional/default-feature modules (ffi/media/sys/xlsx/constants) compiling without broad churn.
+
+3) Boundary fixes applied for default-feature build
+- `src/algorithm/encode.rs`: XLSX cell write uses `f64` cast for `simple_excel_writer`.
+- `src/algorithm/media.rs`: removed direct `Value::Num(Array<f64>)` construction; now uses `Into<Value>` conversion.
+- `src/algorithm/mod.rs` (FFT): switched to `rustfft` generic `Num` path (`Complex<Num>`, `FftPlanner<Num>`), and Num-typed scaling factor.
+- `src/constant.rs`: removed now-redundant f32-only `From<f64> for ConstantValue` impl (conflicted after restoring `From<f64> for Value`).
+
+4) f32-specific Uiua test overrides (default-feature pass)
+- Added/updated f32 override tests in `tests_f32/`:
+  - `ga.ua`
+  - `grid.ua`
+  - `optimized.ua`
+  - `under.ua`
+  - `monadic.ua`
+  - `units.ua`
+  - `data_defs.ua` (copied for relative import from `units.ua`)
+- Purpose: keep baseline f64 tests unchanged while allowing expected f32 precision/format/path differences.
+
+Temporary compatibility still present
+1) f64-to-Value bridges in f32 mode (`src/value.rs`)
+- These are intentionally temporary compatibility shims for optional/default-feature boundaries.
+- They introduce cast boundaries (`f64 -> Num`) but do not change core `Array<Num>` execution type.
+
+2) External format/FFI boundaries
+- Some APIs remain naturally f64-oriented (xlsx writer, media decoding helpers, ffi numeric IO).
+- These boundaries may still cast through f64 for interoperability.
+
+Known remaining test gaps (not compile blockers)
+1) Feature/asset-specific doc-suite failures in no-default test profile
+- `Lena`/`Logo`-related behavior depends on optional assets/features.
+  - `tests::suite` fails on `Lena`/image decode in no-default profile.
+  - `run_prim::tests::prim_docs` fails on `Logo` in no-default profile.
+
+2) f32 override maintenance
+- `tests_f32/*.ua` now captures f32-expected precision/format differences.
+- Keep these overrides in sync if baseline test semantics change upstream.
+
+Next priorities
+1) Decide policy for f32 test expectations
+- Keep separate `tests_f32/` overrides where precision/NaN behavior is intentionally different.
+- Avoid modifying baseline f64 Uiua test files unless behavior is genuinely wrong in both modes.
+
+2) Gradual cleanup of temporary bridges
+- For modules you care about as pure f32 runtime paths, replace compatibility bridges with explicit `Num` plumbing.
+- Keep bridge usage for optional interoperability paths where f64 boundary is acceptable.

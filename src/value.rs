@@ -1601,6 +1601,70 @@ value_from!(char, Char);
 value_from!(Boxed, Box);
 value_from!(Complex, Complex);
 
+#[cfg(feature = "f32_num")]
+impl From<f64> for Value {
+    fn from(item: f64) -> Self {
+        Self::from(item as Num)
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl From<Array<f64>> for Value {
+    fn from(array: Array<f64>) -> Self {
+        Self::Num(array.convert_with(|n| n as Num))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl From<EcoVec<f64>> for Value {
+    fn from(vec: EcoVec<f64>) -> Self {
+        Self::from(Array::from(vec))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl From<CowSlice<f64>> for Value {
+    fn from(vec: CowSlice<f64>) -> Self {
+        Self::from(Array::from(vec))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl From<(Shape, EcoVec<f64>)> for Value {
+    fn from((shape, data): (Shape, EcoVec<f64>)) -> Self {
+        Self::from(Array::new(shape, data))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl From<(Shape, CowSlice<f64>)> for Value {
+    fn from((shape, data): (Shape, CowSlice<f64>)) -> Self {
+        Self::from(Array::new(shape, data))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl<const N: usize> From<[f64; N]> for Value {
+    fn from(array: [f64; N]) -> Self {
+        Self::from(Array::from_iter(array))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl<const M: usize, const N: usize> From<[[f64; N]; M]> for Value {
+    fn from(array: [[f64; N]; M]) -> Self {
+        let data: EcoVec<f64> = array.into_iter().flatten().collect();
+        Self::from(Array::new([M, N], data))
+    }
+}
+
+#[cfg(feature = "f32_num")]
+impl FromIterator<f64> for Value {
+    fn from_iter<I: IntoIterator<Item = f64>>(iter: I) -> Self {
+        Self::from(Array::from_iter(iter))
+    }
+}
+
 impl FromIterator<usize> for Value {
     fn from_iter<I: IntoIterator<Item = usize>>(iter: I) -> Self {
         iter.into_iter().map(|i| i as Num).collect()

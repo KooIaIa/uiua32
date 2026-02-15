@@ -224,7 +224,7 @@ impl Value {
                             let mut sheet_row = Row::new();
                             for cell in row.unboxed().into_rows() {
                                 match cell {
-                                    Value::Num(n) => sheet_row.add_cell(n.data[0]),
+                                    Value::Num(n) => sheet_row.add_cell(n.data[0] as f64),
                                     Value::Byte(b) => sheet_row.add_cell(b.data[0] as f64),
                                     Value::Char(c) => sheet_row.add_cell(c.data[0].to_string()),
                                     Value::Complex(c) => sheet_row.add_cell(c.data[0].to_string()),
