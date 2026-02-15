@@ -105,7 +105,7 @@ impl Value {
     }
     pub(crate) fn type_id(&self) -> u8 {
         match self {
-            Self::Num(_) => f64::TYPE_ID,
+            Self::Num(_) => Num::TYPE_ID,
             Self::Byte(_) => u8::TYPE_ID,
             Self::Complex(_) => Complex::TYPE_ID,
             Self::Char(_) => char::TYPE_ID,
@@ -308,10 +308,7 @@ impl Value {
     pub(crate) fn fill(&mut self, env: &Uiua) -> Result<Value, &'static str> {
         self.match_fill(env);
         match self {
-            Value::Num(_) => env
-                .array_fill::<f64>()
-                .map(|fv| fv.value.convert_with(|n| n as Num))
-                .map(Into::into),
+            Value::Num(_) => env.array_fill::<Num>().map(|fv| fv.value).map(Into::into),
             Value::Byte(_) => env.array_fill::<u8>().map(|fv| fv.value).map(Into::into),
             Value::Complex(_) => env
                 .array_fill::<Complex>()
@@ -1519,7 +1516,7 @@ impl Value {
     }
     pub(crate) fn match_fill<C: FillContext>(&mut self, ctx: &C) {
         if let Value::Byte(arr) = self {
-            if arr.meta.flags.is_boolean() && ctx.scalar_fill::<f64>().is_ok() {
+            if arr.meta.flags.is_boolean() && ctx.scalar_fill::<Num>().is_ok() {
                 arr.meta.flags.remove(ArrayFlags::BOOLEAN);
             }
             if ctx.number_only_fill() {
@@ -1608,65 +1605,6 @@ value_from!(Complex, Complex);
 impl From<f64> for Value {
     fn from(item: f64) -> Self {
         Self::Num(Array::from(item as Num))
-    }
-}
-
-#[cfg(feature = "f32_num")]
-impl From<Array<f64>> for Value {
-    fn from(array: Array<f64>) -> Self {
-        Self::Num(array.convert_with(|n| n as Num))
-    }
-}
-
-#[cfg(feature = "f32_num")]
-impl From<EcoVec<f64>> for Value {
-    fn from(vec: EcoVec<f64>) -> Self {
-        Self::Num(Array::from_iter(vec.into_iter().map(|n| n as Num)))
-    }
-}
-
-#[cfg(feature = "f32_num")]
-impl<const N: usize> From<[f64; N]> for Value {
-    fn from(array: [f64; N]) -> Self {
-        Self::Num(Array::from_iter(array.into_iter().map(|n| n as Num)))
-    }
-}
-
-#[cfg(feature = "f32_num")]
-impl<const M: usize, const N: usize> From<[[f64; N]; M]> for Value {
-    fn from(array: [[f64; N]; M]) -> Self {
-        let data: EcoVec<Num> = array.into_iter().flatten().map(|n| n as Num).collect();
-        Self::Num(Array::new([M, N], data))
-    }
-}
-
-#[cfg(feature = "f32_num")]
-impl From<CowSlice<f64>> for Value {
-    fn from(vec: CowSlice<f64>) -> Self {
-        Self::Num(Array::from_iter(vec.into_iter().map(|n| n as Num)))
-    }
-}
-
-#[cfg(feature = "f32_num")]
-impl From<(Shape, EcoVec<f64>)> for Value {
-    fn from((shape, data): (Shape, EcoVec<f64>)) -> Self {
-        let data: EcoVec<Num> = data.into_iter().map(|n| n as Num).collect();
-        Self::Num(Array::new(shape, data))
-    }
-}
-
-#[cfg(feature = "f32_num")]
-impl From<(Shape, CowSlice<f64>)> for Value {
-    fn from((shape, data): (Shape, CowSlice<f64>)) -> Self {
-        let data: EcoVec<Num> = data.into_iter().map(|n| n as Num).collect();
-        Self::Num(Array::new(shape, data))
-    }
-}
-
-#[cfg(feature = "f32_num")]
-impl FromIterator<f64> for Value {
-    fn from_iter<I: IntoIterator<Item = f64>>(iter: I) -> Self {
-        Self::Num(Array::from_iter(iter.into_iter().map(|n| n as Num)))
     }
 }
 
@@ -2081,7 +2019,7 @@ macro_rules! value_dy_math_impl {
             $(,($($tt)*))?,
             pre {
                 get_pre: |a, b, _left| {
-                    if b.shape != [] || b.type_id() != f64::TYPE_ID {
+                    if b.shape != [] || b.type_id() != Num::TYPE_ID {
                         return None;
                     }
                     let mut flags = a.meta.take_sorted_flags();
@@ -2106,7 +2044,7 @@ macro_rules! value_dy_math_impl {
             $(,($($tt)*))?,
             pre {
                 get_pre: |a, b, _left| {
-                    if a.type_id() != f64::TYPE_ID || b.type_id() != f64::TYPE_ID {
+                    if a.type_id() != Num::TYPE_ID || b.type_id() != Num::TYPE_ID {
                         return None;
                     }
                     let a_flags = a.meta.take_sorted_flags();

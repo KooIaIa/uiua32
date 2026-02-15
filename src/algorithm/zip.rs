@@ -11,8 +11,8 @@ use std::{
 use ecow::eco_vec;
 
 use crate::{
-    Array, ArrayValue, Boxed, ImplPrimitive, Node, Ops, PersistentMeta, Primitive, Shape, SigNode,
-    Uiua, UiuaResult,
+    Array, ArrayValue, Boxed, ImplPrimitive, Node, Num, Ops, PersistentMeta, Primitive, Shape,
+    SigNode, Uiua, UiuaResult,
     algorithm::{pervade::bin_pervade_values, reduce},
     cowslice::CowSlice,
     get_ops, random,
@@ -86,9 +86,9 @@ fn prim_mon_fast_fn(prim: Primitive, span: usize) -> Option<ValueMonFn> {
 fn replace_rand(v: &Value, d: usize) -> Value {
     let shape = &v.shape[..d.min(v.rank())];
     let elem_count: usize = shape.iter().product();
-    let mut data = eco_vec![0.0; elem_count];
+    let mut data = eco_vec![Num::from(0u8); elem_count];
     for n in data.make_mut() {
-        *n = random();
+        *n = random() as Num;
     }
     Array::new(shape, data).into()
 }

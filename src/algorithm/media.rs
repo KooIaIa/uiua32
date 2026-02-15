@@ -1611,6 +1611,7 @@ pub(crate) fn voxels(val: Value, args: Option<Value>, env: &mut Uiua) -> UiuaRes
             }
         }
     }
+    let res_data: EcoVec<Num> = res_data.into_iter().map(|n| n as Num).collect();
     Ok(Array::new(res_shape, res_data).into())
 }
 

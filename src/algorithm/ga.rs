@@ -9,7 +9,8 @@ use ecow::{EcoVec, eco_vec};
 use serde::*;
 
 use crate::{
-    Array, Boxed, Primitive, Shape, Uiua, UiuaResult, Value, algorithm::pervade::derive_new_shape,
+    Array, Boxed, Num, Primitive, Shape, Uiua, UiuaResult, Value,
+    algorithm::pervade::derive_new_shape,
     grid_fmt::GridFmt, is_default,
 };
 
@@ -99,10 +100,10 @@ pub struct Spec {
     pub metrics: Metrics,
 }
 
-fn ga_arg(value: Value, env: &Uiua) -> UiuaResult<(Array<f64>, Shape, usize)> {
+fn ga_arg(value: Value, env: &Uiua) -> UiuaResult<(Array<Num>, Shape, usize)> {
     let arr = match value {
         Value::Byte(arr) => arr.convert(),
-        Value::Num(arr) => arr.convert_with(|n| n as f64),
+        Value::Num(arr) => arr,
         val => {
             return Err(env.error(format!(
                 "Cannot do geometric algebra on {}",
@@ -250,7 +251,7 @@ fn blade_grades(dims: u8) -> impl Iterator<Item = u8> {
 
 #[derive(Clone, Default)]
 struct Arg {
-    arr: Array<f64>,
+    arr: Array<Num>,
     semi: Shape,
     sel: Sel,
     mode: Mode,
@@ -295,7 +296,7 @@ fn init(
     Ok((dims, size, arg))
 }
 impl Arg {
-    fn map(self, f: impl FnOnce(Self) -> Array<f64>) -> Self {
+    fn map(self, f: impl FnOnce(Self) -> Array<Num>) -> Self {
         let (semi, sel, mode) = (self.semi.clone(), self.sel.clone(), self.mode);
         let arr = f(self);
         Self {
@@ -305,7 +306,7 @@ impl Arg {
             mode,
         }
     }
-    fn from_not_transposed(dims: u8, arr: Array<f64>, env: &Uiua) -> UiuaResult<Self> {
+    fn from_not_transposed(dims: u8, arr: Array<Num>, env: &Uiua) -> UiuaResult<Self> {
         let mut semi = arr.shape.clone();
         let size = semi.pop().unwrap_or(1);
         let (sel, mode) = dim_selector(dims, size, env)?;
@@ -330,15 +331,15 @@ impl fmt::Debug for Arg {
     }
 }
 
-fn is_complex(dims: u8, a: &Array<f64>) -> bool {
+fn is_complex(dims: u8, a: &Array<Num>) -> bool {
     a.shape.last() == Some(&2) && dims == 2
 }
 
 fn fast_monadic_complex(
     dims: Option<u8>,
-    mut arr: Array<f64>,
-    f: impl Fn(f64, f64) -> [f64; 2],
-) -> Result<Array<f64>, Array<f64>> {
+    mut arr: Array<Num>,
+    f: impl Fn(Num, Num) -> [Num; 2],
+) -> Result<Array<Num>, Array<Num>> {
     if arr.shape.last() != Some(&2) || dims.unwrap_or(2) != 2 {
         return Err(arr);
     }
@@ -354,10 +355,10 @@ fn fast_monadic_complex(
 
 fn fast_dyadic_complex(
     dims: Option<u8>,
-    mut a: Array<f64>,
-    mut b: Array<f64>,
-    f: impl Fn(f64, f64, f64, f64) -> [f64; 2],
-) -> Result<Array<f64>, [Array<f64>; 2]> {
+    mut a: Array<Num>,
+    mut b: Array<Num>,
+    f: impl Fn(Num, Num, Num, Num) -> [Num; 2],
+) -> Result<Array<Num>, [Array<Num>; 2]> {
     if a.shape.last() != Some(&2) || b.shape.last() != Some(&2) || dims.unwrap_or(2) != 2 {
         return Err([a, b]);
     }
@@ -412,12 +413,12 @@ fn fast_dyadic_complex(
     }
 }
 
-pub fn reverse(spec: Spec, val: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn reverse(spec: Spec, val: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let (dims, _, arg) = init(spec, val, SameSize, env)?;
     Ok(reverse_impl_not_transposed(dims, arg))
 }
 
-fn reverse_impl_not_transposed(dims: u8, mut arg: Arg) -> Array<f64> {
+fn reverse_impl_not_transposed(dims: u8, mut arg: Arg) -> Array<Num> {
     let size = arg.arr.shape.last().copied().unwrap_or(1);
     let slice = arg.arr.data.as_mut_slice();
     for (i, g) in blade_grades(dims).enumerate() {
@@ -433,7 +434,7 @@ fn reverse_impl_not_transposed(dims: u8, mut arg: Arg) -> Array<f64> {
     arg.arr
 }
 
-fn reverse_impl_transposed(dims: u8, mut arg: Arg) -> Array<f64> {
+fn reverse_impl_transposed(dims: u8, mut arg: Arg) -> Array<Num> {
     for (i, g) in blade_grades(dims).enumerate() {
         if let Some(i) = arg.sel[i]
             && g / 2 % 2 == 1
@@ -448,12 +449,12 @@ fn reverse_impl_transposed(dims: u8, mut arg: Arg) -> Array<f64> {
 }
 
 fn pseudo(dims: u8, env: &Uiua) -> UiuaResult<Arg> {
-    let mut pseudoscalar = eco_vec![0.0; 1 << dims];
+    let mut pseudoscalar = eco_vec![Num::from(0u8); 1 << dims];
     *pseudoscalar.make_mut().last_mut().unwrap() = 1.0;
     Arg::from_not_transposed(dims, pseudoscalar.into(), env)
 }
 
-pub fn dual(spec: Spec, val: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn dual(spec: Spec, val: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let (dims, _, arg) = init(spec, val, ExpandFull, env)?;
     let mode = arg.mode;
     let pseudoscalar = pseudo(dims, env)?;
@@ -466,16 +467,16 @@ pub fn dual(spec: Spec, val: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
     Ok(arr)
 }
 
-fn dual_impl(dims: u8, pseu: Arg, arg: Arg, env: &Uiua) -> UiuaResult<Array<f64>> {
+fn dual_impl(dims: u8, pseu: Arg, arg: Arg, env: &Uiua) -> UiuaResult<Array<Num>> {
     product_impl_not_transposed(dims, Metrics::EUCLIDEAN, 1 << dims, false, pseu, arg, env)
 }
 
-pub fn magnitude(spec: Spec, val: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn magnitude(spec: Spec, val: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let (dims, _, arg) = init(spec, val, ExpandFull, env)?;
     magnitude_impl(dims, spec.metrics, arg, env)
 }
 
-fn magnitude_impl(dims: u8, metrics: Metrics, mut arg: Arg, env: &Uiua) -> UiuaResult<Array<f64>> {
+fn magnitude_impl(dims: u8, metrics: Metrics, mut arg: Arg, env: &Uiua) -> UiuaResult<Array<Num>> {
     if is_complex(dims, &arg.arr) {
         let slice = arg.arr.data.as_mut_slice();
         for i in 0..slice.len() / 2 {
@@ -500,7 +501,7 @@ fn magnitude_impl(dims: u8, metrics: Metrics, mut arg: Arg, env: &Uiua) -> UiuaR
     Ok(arr)
 }
 
-pub fn normalize(spec: Spec, val: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn normalize(spec: Spec, val: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let (dims, _, arg) = init(spec, val, Rotor, env)?;
     normalize_impl_not_transposed(dims, spec.metrics, arg, env)
 }
@@ -510,20 +511,20 @@ fn normalize_impl_not_transposed(
     metrics: Metrics,
     arg: Arg,
     env: &Uiua,
-) -> UiuaResult<Array<f64>> {
+) -> UiuaResult<Array<Num>> {
     let mut arr = arg.arr.clone();
     let mag = magnitude_impl(dims, metrics, arg, env)?;
     bin_pervade_mut(mag, &mut arr, false, env, |a, b| div(b, a))?;
     Ok(arr)
 }
 
-fn div(num: f64, denom: f64) -> f64 {
+fn div(num: Num, denom: Num) -> Num {
     if denom == 0.0 { 0.0 } else { num / denom }
 }
 
-pub fn sqrt(spec: Spec, val: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn sqrt(spec: Spec, val: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let (arr, ..) = ga_arg(val, env)?;
-    fast_monadic_complex(spec.dims, arr, |re, im| {
+    fast_monadic_complex(spec.dims, arr, |re: Num, im: Num| {
         if im == 0.0 {
             if re >= 0.0 {
                 [re.sqrt(), 0.0]
@@ -539,7 +540,7 @@ pub fn sqrt(spec: Spec, val: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
     .map_err(|_| env.error("Geometric square root is only implemented for complexes"))
 }
 
-pub fn add(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn add(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let (dims, size, [mut a, mut b]) = init_arr(spec, [a, b], SameSize, env)?;
 
     // println!("a: {a}, semi: {asemi}, sel: {a_sel:?}");
@@ -559,7 +560,7 @@ pub fn add(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64>>
 
     let (csel, _) = dim_selector(dims, size, env)?;
     let mut csemi = derive_new_shape(&a.semi, &b.semi, Err(""), Err(""), env)?;
-    let mut c_data = eco_vec![0.0; size * csemi.elements()];
+    let mut c_data = eco_vec![Num::from(0u8); size * csemi.elements()];
 
     if csemi.contains(&0) {
         csemi.push(size);
@@ -573,7 +574,7 @@ pub fn add(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64>>
     let b_slice = b.arr.data.as_slice();
     let c_slice = c_data.make_mut();
 
-    let add = InfalliblePervasiveFn::new(|a: f64, b: f64| a + b);
+    let add = InfalliblePervasiveFn::new(|a: Num, b: Num| a + b);
     for i in 0..1usize << dims {
         let Some(ci) = csel[i] else {
             continue;
@@ -607,7 +608,7 @@ pub fn add(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64>>
     Ok(result)
 }
 
-pub fn rotor(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn rotor(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     // |1+|ab̃||
     let (dims, size, [a, b]) = init_arr(spec, [a, b], Rotor, env)?;
     let revb = b.map(|b| reverse_impl_not_transposed(dims, b));
@@ -621,7 +622,7 @@ pub fn rotor(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64
     normalize_impl_not_transposed(dims, spec.metrics, arg, env)
 }
 
-pub fn divide(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn divide(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let (a, ..) = ga_arg(a, env)?;
     let (b, ..) = ga_arg(b, env)?;
     Ok(
@@ -638,14 +639,14 @@ pub fn divide(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f6
                         a.shape, b.shape
                     )));
                 }
-                bin_pervade_mut(a, &mut b, false, env, |a: f64, b: f64| a / b)?;
+                bin_pervade_mut(a, &mut b, false, env, |a: Num, b: Num| a / b)?;
                 b
             }
         },
     )
 }
 
-pub fn sandwich(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn sandwich(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let (dims, size, [a, b]) = init_arr(spec, [a, b], Rotor, env)?;
     let (amode, bmode) = (a.mode, b.mode);
     let rev_a = a.clone().map(|a| reverse_impl_not_transposed(dims, a));
@@ -658,17 +659,17 @@ pub fn sandwich(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<
     Ok(res)
 }
 
-pub fn inner_product(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn inner_product(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let (dims, size, [a, b]) = init_arr(spec, [a, b], ExpandFull, env)?;
     product_impl_not_transposed(dims, spec.metrics, size, true, a, b, env)
 }
 
-pub fn wedge_product(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn wedge_product(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let (dims, size, [a, b]) = init_arr(spec, [a, b], Rotor, env)?;
     product_impl_not_transposed(dims, Metrics::NULL, size, false, a, b, env)
 }
 
-pub fn regressive_product(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn regressive_product(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let (dims, _, [a, b]) = init_arr(spec, [a, b], ExpandFull, env)?;
     let pseudoscalar = pseudo(dims, env)?;
     let modes = (a.mode, b.mode);
@@ -686,7 +687,7 @@ pub fn regressive_product(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaRes
     Ok(arr)
 }
 
-pub fn product(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn product(spec: Spec, a: Value, b: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let (dims, size, [a, b]) = init_arr(spec, [a, b], Rotor, env)?;
     product_impl_not_transposed(dims, spec.metrics, size, false, a, b, env)
 }
@@ -698,10 +699,10 @@ fn product_impl_not_transposed(
     mut a: Arg,
     mut b: Arg,
     env: &Uiua,
-) -> UiuaResult<Array<f64>> {
+) -> UiuaResult<Array<Num>> {
     // Scalar case
     if a.arr.rank() == 0 || b.arr.rank() == 0 {
-        bin_pervade_mut(a.arr, &mut b.arr, false, env, |a: f64, b: f64| a * b)?;
+        bin_pervade_mut(a.arr, &mut b.arr, false, env, |a: Num, b: Num| a * b)?;
         b.arr.meta.take_sorted_flags();
         return Ok(b.arr);
     }
@@ -731,7 +732,7 @@ fn product_impl_transposed(
     a: Arg,
     b: Arg,
     env: &Uiua,
-) -> UiuaResult<Array<f64>> {
+) -> UiuaResult<Array<Num>> {
     let Arg {
         arr: a,
         semi: asemi,
@@ -747,7 +748,7 @@ fn product_impl_transposed(
 
     let (csel, _) = dim_selector(dims, size, env)?;
     let mut csemi = derive_new_shape(&asemi, &bsemi, Err(""), Err(""), env)?;
-    let mut c_data = eco_vec![0.0; size * csemi.elements()];
+    let mut c_data = eco_vec![Num::from(0u8); size * csemi.elements()];
 
     // println!("dims: {dims}, metrics: {metrics:?}, size: {size}");
     // println!("a_sel: {asel:?}");
@@ -780,7 +781,7 @@ fn product_impl_transposed(
     //         .collect::<Vec<_>>()
     // );
 
-    let mul = InfalliblePervasiveFn::new(|a: f64, b: f64| a * b);
+    let mul = InfalliblePervasiveFn::new(|a: Num, b: Num| a * b);
     for i in 0..1usize << dims {
         if dims > 5 {
             env.respect_execution_limit()?;
@@ -832,7 +833,7 @@ fn mask_table(dims: u8) -> Vec<usize> {
     mask_table
 }
 
-fn blade_sign_and_metric(dims: u8, metrics: Metrics, dot: bool, a: usize, b: usize) -> (i32, f64) {
+fn blade_sign_and_metric(dims: u8, metrics: Metrics, dot: bool, a: usize, b: usize) -> (i32, Num) {
     let mut sign = 1;
     if dims >= 3 {
         let ab = a ^ b;
@@ -842,7 +843,7 @@ fn blade_sign_and_metric(dims: u8, metrics: Metrics, dot: bool, a: usize, b: usi
             }
         }
     }
-    let mut metric = (!dot || a == 0 || b == 0 || a & b != 0) as u8 as f64;
+    let mut metric = (!dot || a == 0 || b == 0 || a & b != 0) as u8 as Num;
     for i in 0..dims {
         let bit_i = 1 << i;
         if a & bit_i != 0 {
@@ -853,7 +854,7 @@ fn blade_sign_and_metric(dims: u8, metrics: Metrics, dot: bool, a: usize, b: usi
             }
         }
         if (a & bit_i != 0) && (b & bit_i != 0) {
-            metric *= metrics.get(i as usize) as f64;
+            metric *= metrics.get(i as usize) as Num;
         }
     }
     (sign, metric)
@@ -989,7 +990,7 @@ pub fn metrics_from_val(val: &Value) -> Result<Metrics, String> {
     })
 }
 
-pub fn pad_blades(spec: Spec, grades: Value, val: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn pad_blades(spec: Spec, grades: Value, val: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let Some(dims) = spec.dims else {
         return Err(env.error("Blade padding requires a specified number of dimensions"));
     };
@@ -1024,9 +1025,9 @@ pub fn pad_blades(spec: Spec, grades: Value, val: Value, env: &Uiua) -> UiuaResu
     }
 
     let full_size = 1usize << dims;
-    let mut new_shape = semi;
+    let mut new_shape: Shape = semi;
     new_shape.push(full_size);
-    let mut new_data = eco_vec![0.0; new_shape.elements()];
+    let mut new_data = eco_vec![Num::from(0u8); new_shape.elements()];
     let slice = new_data.make_mut();
 
     if let [grade] = *grades {
@@ -1052,7 +1053,7 @@ pub fn pad_blades(spec: Spec, grades: Value, val: Value, env: &Uiua) -> UiuaResu
     Ok(Array::new(new_shape, new_data))
 }
 
-pub fn extract_blades(spec: Spec, grades: Value, val: Value, env: &Uiua) -> UiuaResult<Array<f64>> {
+pub fn extract_blades(spec: Spec, grades: Value, val: Value, env: &Uiua) -> UiuaResult<Array<Num>> {
     let Some(dims) = spec.dims else {
         return Err(env.error("Blade padding requires a specified number of dimensions"));
     };
@@ -1068,7 +1069,7 @@ pub fn extract_blades(spec: Spec, grades: Value, val: Value, env: &Uiua) -> Uiua
     // Process arg
     let (arr, semi, size) = ga_arg(val, env)?;
     if grades.is_empty() {
-        let mut shape = semi;
+        let mut shape: Shape = semi;
         shape.push(0);
         return Ok(Array::new(shape, EcoVec::new()));
     }
@@ -1101,11 +1102,11 @@ pub fn extract_blades(spec: Spec, grades: Value, val: Value, env: &Uiua) -> Uiua
 fn extract_blades_impl(
     dims: u8,
     size: usize,
-    mut arr: Array<f64>,
+    mut arr: Array<Num>,
     semi: Shape,
     grades: &[u8],
     env: &Uiua,
-) -> UiuaResult<Array<f64>> {
+) -> UiuaResult<Array<Num>> {
     let slice = arr.data.as_mut_slice();
     let new_size: usize = grades.iter().map(|&grade| grade_size(dims, grade)).sum();
     let full_size = 1usize << dims;
@@ -1149,11 +1150,11 @@ fn extract_blades_impl(
     Ok(arr)
 }
 
-fn extract_vectors(dims: u8, arr: &mut Array<f64>) {
+fn extract_vectors(dims: u8, arr: &mut Array<Num>) {
     extract_single(arr, 1, dims as usize)
 }
 
-fn extract_single(arr: &mut Array<f64>, left_size: usize, new_size: usize) {
+fn extract_single(arr: &mut Array<Num>, left_size: usize, new_size: usize) {
     let elems: usize = arr.shape.iter().rev().skip(1).product();
     let size = *arr.shape.last().unwrap();
     let slice = arr.data.as_mut_slice();

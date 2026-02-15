@@ -332,9 +332,9 @@ pub fn table_list(f: SigNode, xs: Value, ys: Value, env: &mut Uiua) -> UiuaResul
             // Random
             Some((ImplPrimitive::ReplaceRand2, _)) => {
                 let shape = [xs.row_count(), ys.row_count()];
-                let mut data = eco_vec![0.0; xs.row_count() * ys.row_count()];
+                let mut data = eco_vec![Num::from(0u8); xs.row_count() * ys.row_count()];
                 for n in data.make_mut() {
-                    *n = random();
+                    *n = random() as Num;
                 }
                 env.push(Array::new(shape, data));
             }

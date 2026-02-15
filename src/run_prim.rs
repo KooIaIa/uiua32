@@ -20,7 +20,7 @@ use std::{
 use rand::prelude::*;
 
 use crate::{
-    FunctionId, ImplPrimitive, NumericSubscript, Ops, Primitive, Shape, SubSide, SysOp, Uiua,
+    FunctionId, ImplPrimitive, Num, NumericSubscript, Ops, Primitive, Shape, SubSide, SysOp, Uiua,
     UiuaErrorKind, UiuaResult,
     algorithm::{self, ga::GaOp, loops, reduce, table, zip, *},
     array::Array,
@@ -234,7 +234,7 @@ pub fn run_prim_func(prim: &Primitive, env: &mut Uiua) -> UiuaResult {
             let octaves = env.pop(2)?;
             let coords = env.pop(3)?;
             let noise = coords.noise(&seed, &octaves, env)?;
-            env.push(noise);
+            env.push(noise.convert_with(|n| n as Num));
         }
         Primitive::Type => {
             let val = env.pop(1)?;
@@ -1778,7 +1778,7 @@ fn regex(env: &mut Uiua) -> UiuaResult {
 
         let mut matches: Value =
             Array::<Boxed>::new([0, regex.captures_len()].as_slice(), []).into();
-        let mut locations: Value = Array::<f64>::new([0].as_slice(), []).into();
+        let mut locations: Value = Array::<Num>::new([0].as_slice(), []).into();
 
         for caps in regex.captures_iter(&target) {
             let row: EcoVec<_> = caps
@@ -1796,7 +1796,7 @@ fn regex(env: &mut Uiua) -> UiuaResult {
                 (caps
                     .get(0)
                     .expect("existence of 0 group is guaranteed")
-                    .start() as f64)
+                    .start() as Num)
                     .into(),
                 false,
                 env,

@@ -10,7 +10,7 @@ use std::{
 use ecow::EcoVec;
 
 use crate::{
-    Array, ArrayValue, FormatShape, Primitive, Shape, Uiua, UiuaResult, Value,
+    Array, ArrayValue, FormatShape, Num, Primitive, Shape, Uiua, UiuaResult, Value,
     algorithm::{FillContext, validate_size},
     cowslice::{CowSlice, cowslice, extend_repeat_slice},
     grid_fmt::GridFmt,
@@ -1123,13 +1123,13 @@ impl<T: ArrayValue> Array<T> {
                 self.shape[i] -= taken;
                 self.data.truncate(self.shape.elements());
             }
-            take_amnt.push(taken as f64);
+            take_amnt.push(taken as Num);
         }
-        while take_amnt.last() == Some(&0.0) {
+        while take_amnt.last() == Some(&Num::from(0u8)) {
             take_amnt.pop();
         }
         for (t, &d) in take_amnt.make_mut().iter_mut().zip(&self.shape) {
-            *t += d as f64;
+            *t += d as Num;
         }
         if take_amnt.len() == 1 {
             return Ok(take_amnt[0].into());

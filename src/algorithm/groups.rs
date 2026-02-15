@@ -6,8 +6,8 @@ use std::{
 use ecow::{EcoVec, eco_vec};
 
 use crate::{
-    Array, ArrayValue, Boxed, Node, Ops, Primitive, ScalarNum, Shape, SigNode, Uiua, UiuaResult,
-    Value, cowslice::CowSlice, get_ops, types::push_empty_rows_value, val_as_arr,
+    Array, ArrayValue, Boxed, Node, Num, Ops, Primitive, ScalarNum, Shape, SigNode, Uiua,
+    UiuaResult, Value, cowslice::CowSlice, get_ops, types::push_empty_rows_value, val_as_arr,
 };
 
 use super::multi_output;
@@ -315,7 +315,7 @@ where
     }
 }
 
-fn partition_lens(markers: &[i64]) -> Array<f64> {
+fn partition_lens(markers: &[i64]) -> Array<Num> {
     let mut lens = EcoVec::new();
     let mut prev = i64::MAX;
     let mut len = 0;
@@ -325,20 +325,20 @@ fn partition_lens(markers: &[i64]) -> Array<f64> {
                 len += 1;
             } else {
                 if len > 0 {
-                    lens.push(len as f64);
+                    lens.push(len as Num);
                 }
                 len = 1;
             }
         } else {
             if len > 0 {
-                lens.push(len as f64);
+                lens.push(len as Num);
             }
             len = 0;
         }
         prev = marker;
     }
     if len > 0 {
-        lens.push(len as f64);
+        lens.push(len as Num);
     }
     lens.into()
 }
@@ -556,10 +556,10 @@ pub fn group(f: SigNode, env: &mut Uiua) -> UiuaResult {
                     *len_counts.entry(index.unsigned_abs()).or_insert(0) += 1;
                 }
             }
-            let mut lens: EcoVec<f64> = eco_vec![0.0; buckets];
+            let mut lens: EcoVec<Num> = eco_vec![Num::from(0u8); buckets];
             let slice = lens.make_mut();
             for (index, len) in len_counts {
-                slice[index] = len as f64;
+                slice[index] = len as Num;
             }
             lens.into()
         },
@@ -755,7 +755,7 @@ fn collapse_groups<I, T: ScalarNum>(
     get_groups: impl Fn(Value, &Array<T>) -> I,
     firsts: impl Fn(Value, &[T], &Uiua) -> UiuaResult<Value>,
     lasts: impl Fn(Value, &[T], &Uiua) -> UiuaResult<Value>,
-    lens: impl Fn(&[T]) -> Array<f64>,
+    lens: impl Fn(&[T]) -> Array<Num>,
     indices_error: &'static str,
     env: &mut Uiua,
 ) -> UiuaResult
@@ -878,7 +878,7 @@ pub fn un_group(f: SigNode, env: &mut Uiua) -> UiuaResult {
         )));
     }
     let x = env.pop(1)?;
-    let mut indices = EcoVec::with_capacity(x.row_count());
+    let mut indices: EcoVec<Num> = EcoVec::with_capacity(x.row_count());
     let mut ungrouped = Vec::with_capacity(x.row_count());
     for (i, row) in x.into_rows().enumerate() {
         env.push(row);
@@ -886,7 +886,7 @@ pub fn un_group(f: SigNode, env: &mut Uiua) -> UiuaResult {
         let val = env.pop("ungrouped value")?;
         let count = val.row_count();
         for _ in 0..count {
-            indices.push(i as f64);
+            indices.push(i as Num);
         }
         ungrouped.extend(val.into_rows());
     }
@@ -905,7 +905,7 @@ pub fn un_partition(f: SigNode, env: &mut Uiua) -> UiuaResult {
         )));
     }
     let x = env.pop(1)?;
-    let mut indices = EcoVec::with_capacity(x.row_count());
+    let mut indices: EcoVec<Num> = EcoVec::with_capacity(x.row_count());
     let mut unpartitioned = Vec::with_capacity(x.row_count());
     if let Some(fill) = env.value_fill().map(|fv| fv.value.clone()) {
         for (i, row) in x.into_rows().enumerate() {
@@ -916,16 +916,16 @@ pub fn un_partition(f: SigNode, env: &mut Uiua) -> UiuaResult {
             if i > 0 {
                 if fill.rank() == val.rank() {
                     for row in fill.rows() {
-                        indices.push(0.0);
+                        indices.push(Num::from(0u8));
                         unpartitioned.push(row.clone());
                     }
                 } else {
-                    indices.push(0.0);
+                    indices.push(Num::from(0u8));
                     unpartitioned.push(fill.clone());
                 }
             }
             for _ in 0..count {
-                indices.push(1.0);
+                indices.push(Num::from(1u8));
             }
             unpartitioned.extend(val.into_rows());
         }
@@ -936,7 +936,7 @@ pub fn un_partition(f: SigNode, env: &mut Uiua) -> UiuaResult {
             let val = env.pop("unpartitioned value")?;
             let count = val.row_count();
             for _ in 0..count {
-                indices.push((i + 1) as f64);
+                indices.push((i + 1) as Num);
             }
             unpartitioned.extend(val.into_rows());
         }

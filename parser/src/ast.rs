@@ -6,7 +6,8 @@ use ecow::EcoString;
 use serde::*;
 
 use crate::{
-    BindingCounts, CodeSpan, Complex, Ident, Primitive, SemanticComment, Signature, Sp, Subscript,
+    BindingCounts, CodeSpan, Complex, ComplexNum, Ident, Primitive, SemanticComment, Signature, Sp,
+    Subscript,
     parse::ident_modifier_args,
 };
 
@@ -950,8 +951,8 @@ impl NumWord {
             (a, Self::Infinity(false)) => a.map_with(Self::Real(f64::INFINITY), real, complex),
             (a, Self::Infinity(true)) => a.map_with(Self::Real(f64::NEG_INFINITY), real, complex),
             (Self::Complex(a), Self::Complex(b)) => complex(a, b).into(),
-            (Self::Real(a), Self::Complex(b)) => complex(a.into(), b).into(),
-            (Self::Complex(a), Self::Real(b)) => complex(a, b.into()).into(),
+            (Self::Real(a), Self::Complex(b)) => complex((a as ComplexNum).into(), b).into(),
+            (Self::Complex(a), Self::Real(b)) => complex(a, (b as ComplexNum).into()).into(),
             (Self::Err(e), _) | (_, Self::Err(e)) => Self::Err(e),
         }
         .normalize()

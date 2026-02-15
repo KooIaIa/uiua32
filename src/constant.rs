@@ -10,7 +10,7 @@ use ecow::EcoVec;
 use rand::prelude::*;
 
 use crate::{
-    Array, Boxed, PrimDocFragment, SysBackend, Uiua, Value, WILDCARD_NAN, media,
+    Array, Boxed, Num, PrimDocFragment, SysBackend, Uiua, Value, WILDCARD_NAN, media,
     parse_doc_line_fragments,
 };
 
@@ -105,7 +105,9 @@ impl ConstantValue {
                             e.insert(match big {
                                 BigConstant::Uiua386 => bytes.into_owned().into(),
                                 BigConstant::Elevation => {
-                                    media::image_bytes_to_array(&bytes, true, false)?.into()
+                                    media::image_bytes_to_array(&bytes, true, false)
+                                        .map(|arr| arr.convert_with(|n| n as Num))
+                                        .map(Into::into)?
                                 }
                                 BigConstant::BadAppleGif => {
                                     let (_, mut val) = media::gif_bytes_to_value_gray(&bytes)?;
@@ -125,7 +127,10 @@ impl ConstantValue {
                                         / sr as f64)
                                         .round()
                                         as usize;
-                                    samples.keep_scalar_real_impl(new_row_count).into()
+                                    samples
+                                        .keep_scalar_real_impl(new_row_count)
+                                        .convert_with(|n| n as Num)
+                                        .into()
                                 }
                             })
                             .clone()
@@ -612,7 +617,7 @@ fn music_constant(backend: &dyn SysBackend) -> Value {
                 * rng.random_range(-1.0..=1.0)
                 * ((0.5..=0.6).contains(&(secs % (2.0 * BEAT) / (2.0 * BEAT))) as u8 as f64);
 
-            0.5 * (m + h + kick + hat + snare)
+            (0.5 * (m + h + kick + hat + snare)) as Num
         })
         .collect::<EcoVec<_>>()
         .into()

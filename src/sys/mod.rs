@@ -21,7 +21,7 @@ use time::UtcOffset;
 #[cfg(feature = "native_sys")]
 pub use self::native::*;
 use crate::{
-    Array, BigConstant, Boxed, FfiArg, FfiType, MetaPtr, Ops, Primitive, SysOp, Uiua,
+    Array, BigConstant, Boxed, FfiArg, FfiType, MetaPtr, Num, Ops, Primitive, SysOp, Uiua,
     UiuaErrorKind, UiuaResult, Value,
     algorithm::{multi_output, validate_size},
     cowslice::cowslice,
@@ -82,7 +82,7 @@ impl From<usize> for Handle {
 
 impl Handle {
     pub(crate) fn value(self, kind: HandleKind) -> Value {
-        let mut arr = Array::from(self.0 as f64);
+        let mut arr = Array::from(self.0 as Num);
         arr.meta.handle_kind = Some(kind);
         Boxed(arr.into()).into()
     }
@@ -767,7 +767,7 @@ pub(crate) fn run_sys_op(op: &SysOp, env: &mut Uiua) -> UiuaResult {
         }
         SysOp::TermSize => {
             let (width, height) = env.rt.backend.term_size().map_err(|e| env.error(e))?;
-            env.push(cowslice![height as f64, width as f64])
+            env.push(cowslice![height as Num, width as Num])
         }
         SysOp::Exit => {
             let status = env.pop(1)?.as_int(env, "Status must be an integer")? as i32;
@@ -1535,7 +1535,8 @@ pub(crate) fn run_sys_op_mod(op: &SysOp, ops: Ops, env: &mut Uiua) -> UiuaResult
             let mut stream_env = env.clone();
             let res = env.rt.backend.stream_audio(Box::new(move |time_array| {
                 if push_time {
-                    let time_array = Array::<f64>::from(time_array);
+                    let time_array =
+                        Array::<Num>::from_iter(time_array.into_iter().map(|t| *t as Num));
                     stream_env.push(time_array);
                 }
                 stream_env.exec(f.clone())?;

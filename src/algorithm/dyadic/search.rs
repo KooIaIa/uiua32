@@ -8,7 +8,7 @@ use std::{
 use ecow::{EcoVec, eco_vec};
 
 use crate::{
-    Shape, Uiua, UiuaResult,
+    Num, Shape, Uiua, UiuaResult,
     algorithm::{max_shape, validate_size},
     array::*,
     cowslice::cowslice,
@@ -149,12 +149,12 @@ impl Value {
 impl<T: ArrayValue> Array<T> {
     /// Get the `index of` the rows of this array in another
     #[allow(clippy::mut_range_bound)]
-    pub fn index_of(&self, haystack: &Array<T>, env: &Uiua) -> UiuaResult<Array<f64>> {
+    pub fn index_of(&self, haystack: &Array<T>, env: &Uiua) -> UiuaResult<Array<Num>> {
         let needle = self;
         let default = env
-            .scalar_fill::<f64>()
+            .scalar_fill::<Num>()
             .map(|fv| fv.value)
-            .unwrap_or(haystack.row_count() as f64);
+            .unwrap_or(haystack.row_count() as Num);
         Ok(match needle.rank().cmp(&haystack.rank()) {
             Ordering::Equal => {
                 let has_wildcard = needle.data.iter().any(T::has_wildcard)
@@ -164,7 +164,7 @@ impl<T: ArrayValue> Array<T> {
                     for elem in needle.row_slices() {
                         let index = (haystack.row_slices())
                             .position(|row| ArrayCmpSlice(row) == ArrayCmpSlice(elem))
-                            .map(|i| i as f64)
+                            .map(|i| i as Num)
                             .unwrap_or(default);
                         result_data.push(index);
                     }
@@ -174,13 +174,13 @@ impl<T: ArrayValue> Array<T> {
                     'needle: for elem in needle.row_slices() {
                         let elem_key = ArrayCmpSlice(elem);
                         if let Some(i) = cache.get(&elem_key) {
-                            result_data.push(*i as f64);
+                            result_data.push(*i as Num);
                         } else {
                             for i in next..haystack.row_count() {
                                 let of_key = ArrayCmpSlice(haystack.row_slice(i));
                                 cache.entry(of_key).or_insert(i);
                                 if of_key == elem_key {
-                                    result_data.push(i as f64);
+                                    result_data.push(i as Num);
                                     next = i + 1;
                                     continue 'needle;
                                 }
@@ -207,7 +207,7 @@ impl<T: ArrayValue> Array<T> {
                     let shape = Shape::from(
                         &haystack.shape[..haystack.shape.len() - needle.shape.len() - 1],
                     );
-                    let elem = haystack.shape.row_count() as f64;
+                    let elem = haystack.shape.row_count() as Num;
                     let data = eco_vec![elem; shape.elements()];
                     return Ok(Array::new(shape, data));
                 }
@@ -227,7 +227,7 @@ impl<T: ArrayValue> Array<T> {
                         }
                         let found = l < haystack.row_count()
                             && ArrayCmpSlice(haystack.row_slice(l)) == needle_slice;
-                        if found { l as f64 } else { default }.into()
+                        if found { l as Num } else { default }.into()
                     } else {
                         // Linear search
                         (haystack
@@ -236,7 +236,7 @@ impl<T: ArrayValue> Array<T> {
                                 r.len() == needle.data.len()
                                     && r.iter().zip(&needle.data).all(|(a, b)| a.array_eq(b))
                             })
-                            .map(|i| i as f64)
+                            .map(|i| i as Num)
                             .unwrap_or(default))
                         .into()
                     }
@@ -459,7 +459,7 @@ impl<T: ArrayValue> Array<T> {
             )
             .into());
         }
-        let mut result_data = eco_vec![0.0; haystack.element_count()];
+        let mut result_data = eco_vec![Num::from(0u8); haystack.element_count()];
         let res = result_data.make_mut();
 
         if haystack.rank() == 1 {
@@ -474,7 +474,7 @@ impl<T: ArrayValue> Array<T> {
                     {
                         curr += 1;
                         for j in i..i + needle.data.len() {
-                            res[j] = curr as f64;
+                            res[j] = curr as Num;
                         }
                         i += needle.data.len();
                     } else {
@@ -518,7 +518,7 @@ impl<T: ArrayValue> Array<T> {
                             *s = *c + *o;
                         }
                         let k = haystack.shape.dims_to_flat(&sum).unwrap();
-                        res[k] = match_num as f64;
+                        res[k] = match_num as Num;
                     }
                 }
             }

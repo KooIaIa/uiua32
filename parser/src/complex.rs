@@ -221,16 +221,6 @@ impl From<ComplexNum> for Complex {
     }
 }
 
-#[cfg(feature = "f32_num")]
-impl From<f64> for Complex {
-    fn from(re: f64) -> Self {
-        Self {
-            re: re as ComplexNum,
-            im: 0.0,
-        }
-    }
-}
-
 impl From<u8> for Complex {
     fn from(value: u8) -> Self {
         ComplexNum::from(value).into()

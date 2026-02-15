@@ -542,7 +542,7 @@ impl Value {
         Ok(if self.rank() == 0 {
             match kept {
                 Value::Num(a) => a.keep_scalar_real(counts[0], env)?.into(),
-                Value::Byte(a) => a.convert::<f64>().keep_scalar_real(counts[0], env)?.into(),
+                Value::Byte(a) => a.convert::<Num>().keep_scalar_real(counts[0], env)?.into(),
                 Value::Complex(a) => a.keep_scalar_real(counts[0], env)?.into(),
                 Value::Char(a) => a.keep_scalar_real(counts[0], env)?.into(),
                 Value::Box(a) => a.keep_scalar_real(counts[0], env)?.into(),
@@ -564,7 +564,7 @@ impl Value {
             let count = 1.0 / counts[0];
             match kept {
                 Value::Num(a) => a.keep_scalar_real(count, env)?.into(),
-                Value::Byte(a) => a.convert::<f64>().keep_scalar_real(count, env)?.into(),
+                Value::Byte(a) => a.convert::<Num>().keep_scalar_real(count, env)?.into(),
                 Value::Complex(a) => a.keep_scalar_real(count, env)?.into(),
                 Value::Char(a) => a.keep_scalar_real(count, env)?.into(),
                 Value::Box(a) => a.keep_scalar_real(count, env)?.into(),
@@ -802,7 +802,7 @@ impl<T: ArrayValue> Array<T> {
             let rep_slice = &data[rep * row_len..(rep + 1) * row_len];
             let row_slice = &data[r * row_len..(r + 1) * row_len];
             if ArrayCmpSlice(rep_slice) != ArrayCmpSlice(row_slice) {
-                counts.push((r - rep) as f64);
+                counts.push((r - rep) as Num);
                 dest += 1;
                 for i in 0..row_len {
                     data[dest * row_len + i] = data[r * row_len + i].clone();
@@ -811,7 +811,7 @@ impl<T: ArrayValue> Array<T> {
             }
         }
         if rep < row_count {
-            counts.push((row_count - rep) as f64);
+            counts.push((row_count - rep) as Num);
             dest += 1;
         }
         self.data.truncate(dest * row_len);
@@ -1857,7 +1857,7 @@ fn validate_base(base: f64, env: &Uiua) -> UiuaResult {
 }
 
 impl<T: RealArrayValue + GridFmt> Array<T> {
-    fn base_scalar(&self, base: f64, env: &Uiua) -> UiuaResult<Array<f64>> {
+    fn base_scalar(&self, base: f64, env: &Uiua) -> UiuaResult<Array<Num>> {
         validate_base(base, env)?;
 
         // Validation
@@ -1875,15 +1875,15 @@ impl<T: RealArrayValue + GridFmt> Array<T> {
                 .unwrap_or(0);
             let mut new_shape = self.shape.clone();
             new_shape.push(max_row_len);
-            let elem_count = validate_size::<f64>(new_shape.iter().copied(), env)?;
-            let mut new_data = eco_vec![0.0; elem_count];
+            let elem_count = validate_size::<Num>(new_shape.iter().copied(), env)?;
+            let mut new_data = eco_vec![Num::from(0u8); elem_count];
             let slice = new_data.make_mut();
             for (i, n) in self.data.iter().enumerate() {
                 let n = n.to_f64();
                 let mut abs_n = n.abs();
                 let sign = if n < 0.0 { -1.0 } else { 1.0 };
                 for j in 0..max_row_len {
-                    slice[i * max_row_len + j] = abs_n.rem_euclid(base) * sign;
+                    slice[i * max_row_len + j] = (abs_n.rem_euclid(base) * sign) as Num;
                     abs_n = abs_n.div_euclid(base);
                 }
             }
@@ -1902,19 +1902,19 @@ impl<T: RealArrayValue + GridFmt> Array<T> {
             let max_len = rows.iter().map(|row| row.len()).max().unwrap_or(0);
             let mut new_shape = self.shape.clone();
             new_shape.push(max_len);
-            let elem_count = validate_size::<f64>(new_shape.iter().copied(), env)?;
-            let mut new_data = eco_vec![0.0; elem_count];
+            let elem_count = validate_size::<Num>(new_shape.iter().copied(), env)?;
+            let mut new_data = eco_vec![Num::from(0u8); elem_count];
             let slice = new_data.make_mut();
             for (i, row) in rows.into_iter().enumerate() {
                 for (j, n) in row.into_iter().enumerate() {
-                    slice[i * max_len + j] = n;
+                    slice[i * max_len + j] = n as Num;
                 }
             }
             Array::new(new_shape, new_data)
         })
     }
-    fn base_list(&self, bases: &[f64], env: &Uiua) -> UiuaResult<Array<f64>> {
-        let fill = env.scalar_fill::<f64>().ok().map(|fv| fv.value);
+    fn base_list(&self, bases: &[f64], env: &Uiua) -> UiuaResult<Array<Num>> {
+        let fill = env.scalar_fill::<Num>().ok().map(|fv| fv.value as f64);
         // Validation
         for base in bases.iter().copied().chain(fill) {
             if base.is_infinite() && base.is_sign_negative() {
@@ -1939,8 +1939,8 @@ impl<T: RealArrayValue + GridFmt> Array<T> {
         let num_digits = bases.len() + fill_digits;
         let mut new_shape = self.shape.clone();
         new_shape.push(num_digits);
-        let elem_count = validate_size::<f64>(new_shape.iter().copied(), env)?;
-        let mut new_data = eco_vec![0.0; elem_count];
+        let elem_count = validate_size::<Num>(new_shape.iter().copied(), env)?;
+        let mut new_data = eco_vec![Num::from(0u8); elem_count];
         let slice = new_data.make_mut();
         for (i, n) in self.data.iter().enumerate() {
             let mut n = n.to_f64();
@@ -1955,40 +1955,41 @@ impl<T: RealArrayValue + GridFmt> Array<T> {
                 .enumerate()
             {
                 if n == f64::INFINITY {
-                    slice[i * num_digits + j] = n;
+                    slice[i * num_digits + j] = n as Num;
                     break;
                 } else {
-                    slice[i * num_digits + j] = n.rem_euclid(base);
+                    slice[i * num_digits + j] = n.rem_euclid(base) as Num;
                     n = n.div_euclid(base);
                 }
             }
         }
         Ok(Array::new(new_shape, new_data))
     }
-    fn antibase_scalar(&self, base: f64, env: &Uiua) -> UiuaResult<Array<f64>> {
+    fn antibase_scalar(&self, base: f64, env: &Uiua) -> UiuaResult<Array<Num>> {
         let mut shape = self.shape.clone();
         let row_len = shape.pop().unwrap_or(1);
-        let elem_count = validate_size::<f64>(shape.iter().copied(), env)?;
-        let mut data = eco_vec![0f64; elem_count];
+        let elem_count = validate_size::<Num>(shape.iter().copied(), env)?;
+        let mut data = eco_vec![Num::from(0u8); elem_count];
+        let base = base as Num;
         if row_len > 0 {
             let slice = data.make_mut();
             for (i, chunk) in self.data.chunks_exact(row_len).enumerate() {
                 for n in chunk.iter().rev() {
-                    slice[i] = slice[i].mul_add(base, n.to_f64());
+                    slice[i] = slice[i].mul_add(base, n.to_f64() as Num);
                 }
             }
         }
         Ok(Array::new(shape, data))
     }
-    fn antibase_list(&self, bases: &[f64], env: &Uiua) -> UiuaResult<Array<f64>> {
-        let fill = env.scalar_unfill::<f64>().ok();
+    fn antibase_list(&self, bases: &[f64], env: &Uiua) -> UiuaResult<Array<Num>> {
+        let fill = env.scalar_unfill::<Num>().ok();
         let mut shape = self.shape.clone();
         let row_len = shape.pop().unwrap_or(1);
-        let elem_count = validate_size::<f64>(shape.iter().copied(), env)?;
-        let mut data = eco_vec![0f64; elem_count];
+        let elem_count = validate_size::<Num>(shape.iter().copied(), env)?;
+        let mut data = eco_vec![Num::from(0u8); elem_count];
         if row_len > 0 {
             let slice = data.make_mut();
-            let mut bases = bases.to_vec();
+            let mut bases: Vec<Num> = bases.iter().map(|&b| b as Num).collect();
             let count = row_len.saturating_sub(bases.len());
             bases.extend(repeat_n(
                 fill.as_ref().map(|fv| fv.value).unwrap_or(1.0),
@@ -1997,10 +1998,10 @@ impl<T: RealArrayValue + GridFmt> Array<T> {
             if fill.is_some_and(|fv| fv.is_left()) {
                 bases.rotate_right(count);
             }
-            let scan: Vec<f64> = bases
+            let scan: Vec<Num> = bases
                 .iter()
-                .scan(1.0, |acc, b| {
-                    *acc *= if b.is_infinite() { 1.0 } else { *b };
+                .scan(Num::from(1u8), |acc, b| {
+                    *acc *= if b.is_infinite() { Num::from(1u8) } else { *b };
                     Some(*acc)
                 })
                 .collect();
@@ -2009,7 +2010,7 @@ impl<T: RealArrayValue + GridFmt> Array<T> {
                     if b.is_infinite() {
                         b = scan[j];
                     }
-                    slice[i] = slice[i].mul_add(b, n.to_f64());
+                    slice[i] = slice[i].mul_add(b, n.to_f64() as Num);
                 }
             }
         }
@@ -2160,8 +2161,8 @@ impl Value {
 
         let mut random = |shape: &[usize]| -> UiuaResult<_> {
             let shape = Shape::from(shape);
-            let elem_count = validate_size::<f64>(shape.iter().copied(), env)?;
-            let mut data = eco_vec![0.0; elem_count];
+            let elem_count = validate_size::<Num>(shape.iter().copied(), env)?;
+            let mut data = eco_vec![Num::from(0u8); elem_count];
             for x in data.make_mut() {
                 *x = rng.random();
             }

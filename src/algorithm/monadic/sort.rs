@@ -4,15 +4,15 @@ use ecow::EcoVec;
 use rand::Rng;
 use rayon::prelude::*;
 
-use crate::{Array, ArrayValue, Value, algorithm::ArrayCmpSlice, random_with, val_as_arr};
+use crate::{Array, ArrayValue, Num, Value, algorithm::ArrayCmpSlice, random_with, val_as_arr};
 
 impl Value {
     /// Get the `rise` of the value
-    pub fn rise(&self) -> Array<f64> {
+    pub fn rise(&self) -> Array<Num> {
         val_as_arr!(self, Array::rise)
     }
     /// Get the `fall` of the value
-    pub fn fall(&self) -> Array<f64> {
+    pub fn fall(&self) -> Array<Num> {
         val_as_arr!(self, Array::fall)
     }
     /// Sort the value ascending
@@ -41,7 +41,7 @@ impl Value {
 
 impl<T: ArrayValue> Array<T> {
     /// Get the `rise` of the array
-    pub fn rise(&self) -> Array<f64> {
+    pub fn rise(&self) -> Array<Num> {
         if self.rank() == 0 {
             return Array::scalar(0.0);
         }
@@ -49,7 +49,7 @@ impl<T: ArrayValue> Array<T> {
             return Array::default();
         }
         let mut indices = (0..self.row_count())
-            .map(|i| i as f64)
+            .map(|i| i as Num)
             .collect::<EcoVec<_>>();
         if self.meta.is_sorted_up() {
             return indices.into();
@@ -86,7 +86,7 @@ impl<T: ArrayValue> Array<T> {
         indices
     }
     /// Get the `fall` of the array
-    pub fn fall(&self) -> Array<f64> {
+    pub fn fall(&self) -> Array<Num> {
         if self.rank() == 0 {
             return Array::scalar(0.0);
         }
@@ -94,7 +94,7 @@ impl<T: ArrayValue> Array<T> {
             return Array::default();
         }
         let mut indices = (0..self.row_count())
-            .map(|i| i as f64)
+            .map(|i| i as Num)
             .collect::<EcoVec<_>>();
         if self.meta.is_sorted_down() {
             return indices.into();

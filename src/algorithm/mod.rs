@@ -16,8 +16,9 @@ use ecow::{EcoString, EcoVec};
 use smallvec::SmallVec;
 
 use crate::{
-    Array, ArrayValue, Boxed, CodeSpan, Complex, ExactDoubleIterator, Inputs, Ops, PersistentMeta,
-    Shape, SigNode, Signature, Span, Uiua, UiuaError, UiuaErrorKind, UiuaResult, Value,
+    Array, ArrayValue, Boxed, CodeSpan, Complex, ExactDoubleIterator, Inputs, Num, Ops,
+    PersistentMeta, Shape, SigNode, Signature, Span, Uiua, UiuaError, UiuaErrorKind, UiuaResult,
+    Value,
     cowslice::ecovec_extend_cowslice, fill::FillValue, grid_fmt::GridFmt,
 };
 
@@ -270,11 +271,11 @@ pub trait FillContext: ErrorContext {
     fn is_fill_error(error: &Self::Error) -> bool;
     /// There is a number fill but not a byte fill
     fn number_only_fill(&self) -> bool {
-        self.array_fill::<f64>().is_ok() && self.array_fill::<u8>().is_err()
+        self.array_fill::<Num>().is_ok() && self.array_fill::<u8>().is_err()
     }
     fn is_scalar_filled(&self, val: &Value) -> bool {
         match val {
-            Value::Num(_) => self.scalar_fill::<f64>().is_ok(),
+            Value::Num(_) => self.scalar_fill::<Num>().is_ok(),
             Value::Byte(_) => self.scalar_fill::<u8>().is_ok(),
             Value::Complex(_) => self.scalar_fill::<Complex>().is_ok(),
             Value::Char(_) => self.scalar_fill::<char>().is_ok(),

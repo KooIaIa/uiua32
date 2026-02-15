@@ -793,12 +793,12 @@ impl Value {
                 if start >= 0 && max + start <= 256 {
                     (start..max + start).map(|i| i as u8).collect()
                 } else {
-                    validate_size::<f64>([max.unsigned_abs()], env)?;
-                    (start..max + start).map(|i| i as f64).collect()
+                    validate_size::<Num>([max.unsigned_abs()], env)?;
+                    (start..max + start).map(|i| i as Num).collect()
                 }
             } else {
-                validate_size::<f64>([max.unsigned_abs()], env)?;
-                (max + start..start).map(|i| i as f64).rev().collect()
+                validate_size::<Num>([max.unsigned_abs()], env)?;
+                (max + start..start).map(|i| i as Num).rev().collect()
             };
             value.meta.mark_sorted_up(max >= 0);
             value.meta.mark_sorted_down(max <= 0);
@@ -806,7 +806,7 @@ impl Value {
             return Ok(value);
         }
         if ishape.is_empty() {
-            return Ok(Array::<f64>::new(0, CowSlice::new()).into());
+            return Ok(Array::<Num>::new(0, CowSlice::new()).into());
         }
         let mut shape = Shape::from_iter(ishape.iter().map(|d| {
             let d = d - inclusive as isize * (start - 1);
@@ -834,12 +834,12 @@ impl Value {
             "Shape should be a single integer or a list of integers",
         )?;
         let shape = Shape::from_iter(ishape.iter().map(|n| n.unsigned_abs()));
-        let elems: usize = validate_size::<f64>(shape.iter().copied(), env)?;
+        let elems: usize = validate_size::<Num>(shape.iter().copied(), env)?;
         let mut val: Value = if elems < 256 {
             Array::new(shape, EcoVec::from_iter((0..elems).map(|i| i as u8))).into()
         } else {
             let mut v = EcoVec::new();
-            unsafe { v.extend_from_trusted((0..elems).map(|i| i as f64)) }
+            unsafe { v.extend_from_trusted((0..elems).map(|i| i as Num)) }
             Array::new(shape, v).into()
         };
         let first_max = ishape.first().copied().unwrap_or(0);
@@ -859,7 +859,7 @@ pub(crate) fn range(
     start: isize,
     inclusive: bool,
     env: &Uiua,
-) -> UiuaResult<Result<CowSlice<f64>, CowSlice<u8>>> {
+) -> UiuaResult<Result<CowSlice<Num>, CowSlice<u8>>> {
     let adjust = |d: isize| {
         let d = d - inclusive as isize * (start - 1);
         if inclusive && d < 0 { 0 } else { d }
@@ -871,7 +871,7 @@ pub(crate) fn range(
         return Ok(Err(CowSlice::new()));
     }
     // Validate actual size
-    let len = validate_size::<f64>(
+    let len = validate_size::<Num>(
         (shape.iter())
             .map(|&d| adjust(d).unsigned_abs())
             .chain([shape.len()]),
@@ -903,14 +903,14 @@ pub(crate) fn range(
         }
         Ok(Err(data.into()))
     } else {
-        validate_size::<f64>([len], env)?;
-        let mut data: EcoVec<f64> = eco_vec![0.0; len];
+        validate_size::<Num>([len], env)?;
+        let mut data: EcoVec<Num> = eco_vec![Num::from(0u8); len];
         let data_slice = data.make_mut();
-        let start = start as f64;
+        let start = start as Num;
         for i in 0..elem_count {
             let dim = i % shape.len();
             let index = i / shape.len();
-            data_slice[i] = (index / scan[dim] % adjust(shape[dim]).unsigned_abs()) as f64;
+            data_slice[i] = (index / scan[dim] % adjust(shape[dim]).unsigned_abs()) as Num;
             if shape[dim] < 0 {
                 data_slice[i] = -1.0 - data_slice[i];
             }
@@ -1405,7 +1405,7 @@ impl Value {
         }
     }
     /// Count which occurrence of each row that row is
-    pub fn occurrences(&self) -> Array<f64> {
+    pub fn occurrences(&self) -> Array<Num> {
         val_as_arr!(self, Array::occurrences)
     }
 }
@@ -1470,7 +1470,7 @@ impl<T: ArrayValue> Array<T> {
             Array::new(classified_shape, classified).into()
         } else {
             // Doesn't fit in a u8
-            let mut classified = eco_vec![0.0; classified_shape.elements()];
+            let mut classified = eco_vec![Num::from(0u8); classified_shape.elements()];
             if row_shape.elements() == 0 || row_shape.row_len() == 0 {
                 return Array::new(classified_shape, classified).into();
             }
@@ -1480,7 +1480,7 @@ impl<T: ArrayValue> Array<T> {
                 for row in row.chunks_exact(row_shape.row_len()) {
                     let new_class = classes.len();
                     let class = *classes.entry(ArrayCmpSlice(row)).or_insert(new_class);
-                    classified_slice[i] = class as f64;
+                    classified_slice[i] = class as Num;
                     i += 1;
                 }
             }
@@ -1514,12 +1514,12 @@ impl<T: ArrayValue> Array<T> {
             Array::new(classified_shape, classified).into()
         } else {
             // Doesn't fit in a u8
-            let mut classified = eco_vec![0.0; cell_count];
+            let mut classified = eco_vec![Num::from(0u8); cell_count];
             let classified_slice = classified.make_mut();
             for chunk in self.data.chunks_exact(cell_size) {
                 let new_class = classes.len();
                 let class = *classes.entry(ArrayCmpSlice(chunk)).or_insert(new_class);
-                classified_slice[i] = class as f64;
+                classified_slice[i] = class as Num;
                 i += 1;
             }
             Array::new(classified_shape, classified).into()
@@ -1626,8 +1626,8 @@ impl<T: ArrayValue> Array<T> {
         }
     }
     /// Count which occurrence of each row that row is
-    pub fn occurrences(&self) -> Array<f64> {
-        let mut data = eco_vec![0.0; self.row_count()];
+    pub fn occurrences(&self) -> Array<Num> {
+        let mut data = eco_vec![Num::from(0u8); self.row_count()];
         let shape: Shape = self.shape.iter().take(1).copied().collect();
         if self.row_count() == 0 {
             return Array::new(shape, data);
@@ -1636,24 +1636,24 @@ impl<T: ArrayValue> Array<T> {
         if self.meta.is_sorted_up() || self.meta.is_sorted_down() {
             let mut rows = self.row_slices().map(ArrayCmpSlice);
             let mut prev = rows.next().unwrap();
-            slice[0] = 0.0;
-            let mut next_count = 1.0;
+            slice[0] = Num::from(0u8);
+            let mut next_count = Num::from(1u8);
             for (row, count) in rows.zip(slice.iter_mut().skip(1)) {
                 if row == prev {
                     *count = next_count;
-                    next_count += 1.0;
+                    next_count += Num::from(1u8);
                 } else {
-                    *count = 0.0;
-                    next_count = 1.0;
+                    *count = Num::from(0u8);
+                    next_count = Num::from(1u8);
                 }
                 prev = row;
             }
         } else {
             let mut counts = HashMap::new();
             for (row, count) in self.row_slices().zip(slice.iter_mut()) {
-                let curr = counts.entry(ArrayCmpSlice(row)).or_insert(0.0);
+                let curr = counts.entry(ArrayCmpSlice(row)).or_insert(Num::from(0u8));
                 *count = *curr;
-                *curr += 1.0;
+                *curr += Num::from(1u8);
             }
         }
         Array::new(shape, data)
@@ -1754,15 +1754,15 @@ impl<T: RealArrayValue> Array<T> {
         let mut shape = self.shape.clone();
         shape.push(bit_count);
         let val: Value = if any_neg {
-            // If any number is negative, make a f64 array
-            let mut new_data = eco_vec![0.0; self.data.len() * bit_count];
+            // If any number is negative, make a Num array
+            let mut new_data = eco_vec![Num::from(0u8); self.data.len() * bit_count];
             let new_data_slice = new_data.make_mut();
             // LSB first
             for (i, (n, is_neg)) in nats.into_iter().zip(negatives).enumerate() {
                 let mut n = n;
                 for j in 0..bit_count.min(127) {
                     let index = i * bit_count + j;
-                    let bit = u8::from(n & 1 != 0) as f64;
+                    let bit = u8::from(n & 1 != 0) as Num;
                     let signed_bit = if is_neg { -bit } else { bit };
                     unsafe {
                         *new_data_slice.get_unchecked_mut(index) = signed_bit;
@@ -1819,15 +1819,15 @@ where
         if bits_slice_len == 0 {
             return Ok(Array::<u8>::new(shape, eco_vec![0; elems]).into());
         }
-        let mut new_data = eco_vec![0.0; elems];
+        let mut new_data = eco_vec![Num::from(0u8); elems];
         let new_data_slice = new_data.make_mut();
         // LSB first
         for (i, bits) in self.data.chunks_exact(bits_slice_len).enumerate() {
-            let mut n = 0.0;
-            let mut coeff = 1.0f64;
+            let mut n = Num::from(0u8);
+            let mut coeff = Num::from(1u8);
             for bit in bits.iter() {
-                n += bit.to_f64() * coeff;
-                coeff *= 2.0f64;
+                n += bit.to_f64() as Num * coeff;
+                coeff *= Num::from(2u8);
             }
             new_data_slice[i] = n;
         }
@@ -2016,8 +2016,8 @@ impl Value {
                 if let Some(&min) = min_size.first() {
                     size = size.max(min);
                 }
-                validate_size::<f64>([size], env)?;
-                let mut data = eco_vec![0.0; size];
+                validate_size::<Num>([size], env)?;
+                let mut data = eco_vec![Num::from(0u8); size];
                 let data_slice = data.make_mut();
                 if is_sorted {
                     let mut j = 0;
@@ -2030,7 +2030,7 @@ impl Value {
                             j += 1;
                             count += 1;
                         }
-                        data_slice[i] = count as f64;
+                        data_slice[i] = count as Num;
                     }
                 } else {
                     let mut counts = HashMap::new();
@@ -2038,7 +2038,7 @@ impl Value {
                         *counts.entry(i).or_insert(0) += 1;
                     }
                     for i in 0..size {
-                        data_slice[i] = counts.get(&i).copied().unwrap_or(0) as f64;
+                        data_slice[i] = counts.get(&i).copied().unwrap_or(0) as Num;
                     }
                 }
                 Array::from(data).into()
@@ -2076,8 +2076,8 @@ impl Value {
                     }
                     Array::new(shape, data).into()
                 } else {
-                    let data_len = validate_size::<f64>(shape.iter().copied(), env)?;
-                    let mut data = eco_vec![0.0; data_len];
+                    let data_len = validate_size::<Num>(shape.iter().copied(), env)?;
+                    let mut data = eco_vec![Num::from(0u8); data_len];
                     let data_slice = data.make_mut();
                     for (key, count) in counts {
                         let mut i = 0;
@@ -2086,7 +2086,7 @@ impl Value {
                             i += n * row_len;
                             row_len *= d;
                         }
-                        data_slice[i] = count as f64;
+                        data_slice[i] = count as Num;
                     }
                     Array::new(shape, data).into()
                 }
@@ -2129,7 +2129,7 @@ impl Value {
     /// Convert a string value to a list of UTF-16 code units
     pub fn utf16(&self, env: &Uiua) -> UiuaResult<Self> {
         let s = self.as_string(env, "Argument to utf₁₆ must be a string")?;
-        Ok(Array::<f64>::from_iter(s.encode_utf16().map(|u| u as f64)).into())
+        Ok(Array::<Num>::from_iter(s.encode_utf16().map(|u| u as Num)).into())
     }
     /// Convert a list of UTF-8 bytes to a string value
     pub fn unutf8(&self, env: &Uiua) -> UiuaResult<Self> {
@@ -2185,8 +2185,8 @@ impl Value {
 }
 
 impl<T: ArrayValue> Array<T> {
-    pub(crate) fn first_min_index(&self, env: &Uiua) -> UiuaResult<f64> {
-        let fill = env.scalar_fill::<f64>();
+    pub(crate) fn first_min_index(&self, env: &Uiua) -> UiuaResult<Num> {
+        let fill = env.scalar_fill::<Num>();
         if self.rank() == 0 || self.meta.is_sorted_up() && fill.is_err() {
             return Ok(0.0);
         }
@@ -2202,15 +2202,15 @@ impl<T: ArrayValue> Array<T> {
             .min_by(|(_, a), (_, b)| a.cmp(b))
             .unwrap()
             .0;
-        Ok(index as f64)
+        Ok(index as Num)
     }
-    pub(crate) fn first_max_index(&self, env: &Uiua) -> UiuaResult<f64> {
+    pub(crate) fn first_max_index(&self, env: &Uiua) -> UiuaResult<Num> {
         if self.rank() == 0 {
             return Ok(0.0);
         }
         if self.row_count() == 0 {
             return env
-                .scalar_fill::<f64>()
+                .scalar_fill::<Num>()
                 .map(|fv| fv.value)
                 .map_err(|e| env.error(format!("Cannot get max index of an empty array{e}")));
         }
@@ -2221,15 +2221,15 @@ impl<T: ArrayValue> Array<T> {
             .min_by(|(_, a), (_, b)| a.cmp(b).reverse())
             .unwrap()
             .0;
-        Ok(index as f64)
+        Ok(index as Num)
     }
-    pub(crate) fn last_min_index(&self, env: &Uiua) -> UiuaResult<f64> {
+    pub(crate) fn last_min_index(&self, env: &Uiua) -> UiuaResult<Num> {
         if self.rank() == 0 {
             return Ok(0.0);
         }
         if self.row_count() == 0 {
             return env
-                .scalar_fill::<f64>()
+                .scalar_fill::<Num>()
                 .map(|fv| fv.value)
                 .map_err(|e| env.error(format!("Cannot get min index of an empty array{e}")));
         }
@@ -2240,10 +2240,10 @@ impl<T: ArrayValue> Array<T> {
             .max_by(|(_, a), (_, b)| a.cmp(b).reverse())
             .unwrap()
             .0;
-        Ok(index as f64)
+        Ok(index as Num)
     }
-    pub(crate) fn last_max_index(&self, env: &Uiua) -> UiuaResult<f64> {
-        let fill = env.scalar_fill::<f64>();
+    pub(crate) fn last_max_index(&self, env: &Uiua) -> UiuaResult<Num> {
+        let fill = env.scalar_fill::<Num>();
         if self.rank() == 0 || self.meta.is_sorted_up() && fill.is_err() {
             return Ok(0.0);
         }
@@ -2259,7 +2259,7 @@ impl<T: ArrayValue> Array<T> {
             .max_by(|(_, a), (_, b)| a.cmp(b))
             .unwrap()
             .0;
-        Ok(index as f64)
+        Ok(index as Num)
     }
     pub(crate) fn first_sort(self, env: &Uiua) -> UiuaResult<Self> {
         if self.rank() == 0 || self.row_count() <= 1 || self.is_sorted_up() {

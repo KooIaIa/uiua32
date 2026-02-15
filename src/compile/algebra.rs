@@ -67,7 +67,7 @@ pub fn algebraic_inverse(nodes: &[Node], asm: &Assembly) -> Result<Node, Option<
             // a roundish number with a bit of error.
             // - If it looks roundish, we do (y - c)^(1/p) / k^(1/p) with k^(1/p) getting its error fixed
             // - Otherwise, we do x = ((y - c)/k)^(1/p)
-            let mut root_p_of_k = k.powc(1.0 / p);
+            let mut root_p_of_k = k.powc((1.0 / p) as Num);
             const ROUND_TO: Num = 2.0 * Num::EPSILON;
             let rounded = (root_p_of_k / ROUND_TO).round() * ROUND_TO;
             let k_is_int = k.im == 0.0 && k.re.fract() == 0.0;
@@ -87,7 +87,7 @@ pub fn algebraic_inverse(nodes: &[Node], asm: &Assembly) -> Result<Node, Option<
             } else if p == -1.0 {
                 node.push(Prim(Reciprocal, span));
             } else if p != 1.0 {
-                node.push(push(p.into()));
+                node.push(push((p as Num).into()));
                 node.push(ImplPrim(Root, span));
             }
 
@@ -804,7 +804,7 @@ impl Expr {
         if term == Term::ONE { Some(coef) } else { None }
     }
     fn pow(self, power: Self) -> Option<Self> {
-        if self.as_constant().is_some_and(|c| c == E.into())
+        if self.as_constant().is_some_and(|c| c == (E as Num).into())
             && let Some((Term::X(1.0), _)) = power.single()
         {
             return Some(Term::Exp(power).into());
@@ -896,7 +896,7 @@ impl From<Term> for Expr {
 
 impl From<f64> for Expr {
     fn from(val: f64) -> Self {
-        Complex::from(val).into()
+        Complex::from(val as Num).into()
     }
 }
 

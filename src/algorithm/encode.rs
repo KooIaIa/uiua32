@@ -477,9 +477,9 @@ impl Value {
                     which does not match format {format}"
             )));
         }
-        let mut data = eco_vec![0.0; new_shape.elements()];
+        let mut data = eco_vec![Num::from(0u8); new_shape.elements()];
         let slice = data.make_mut();
-        fn read<const N: usize>(src: &[u8], dst: &mut [f64], f: impl Fn([u8; N]) -> f64) {
+        fn read<const N: usize>(src: &[u8], dst: &mut [Num], f: impl Fn([u8; N]) -> Num) {
             let mut curr = [0; N];
             for (i, src) in src.chunks_exact(N).enumerate() {
                 curr.copy_from_slice(src);
@@ -489,12 +489,12 @@ impl Value {
         macro_rules! read {
             ($ty:ty) => {
                 match side {
-                    None => read(&bytes.data, slice, |arr| <$ty>::from_ne_bytes(arr) as f64),
+                    None => read(&bytes.data, slice, |arr| <$ty>::from_ne_bytes(arr) as Num),
                     Some(SubSide::Left) => {
-                        read(&bytes.data, slice, |arr| <$ty>::from_le_bytes(arr) as f64)
+                        read(&bytes.data, slice, |arr| <$ty>::from_le_bytes(arr) as Num)
                     }
                     Some(SubSide::Right) => {
-                        read(&bytes.data, slice, |arr| <$ty>::from_be_bytes(arr) as f64)
+                        read(&bytes.data, slice, |arr| <$ty>::from_be_bytes(arr) as Num)
                     }
                 }
             };
